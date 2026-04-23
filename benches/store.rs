@@ -36,7 +36,7 @@ fn bench_cold_start(c: &mut Criterion) {
     // Pre-populate with 100 pages
     for slug in 0u64..100 {
         let keys = random_vec(32 * 128, &mut rng);
-        let outlier_indices = detect_outliers(&keys, 32, 128, 4);
+        let outlier_indices = detect_outliers(&keys, 32, 128, 4).unwrap();
         let compressed = sketch.quantize(&keys, 32, &outlier_indices);
         store.append(slug, slug * 10, &compressed).unwrap();
     }
@@ -58,7 +58,7 @@ fn bench_append(c: &mut Criterion) {
     let mut rng = ChaCha20Rng::seed_from_u64(200);
 
     let keys = random_vec(32 * 128, &mut rng);
-    let outlier_indices = detect_outliers(&keys, 32, 128, 4);
+    let outlier_indices = detect_outliers(&keys, 32, 128, 4).unwrap();
     let compressed = sketch.quantize(&keys, 32, &outlier_indices);
 
     let mut slug = 0u64;
@@ -81,7 +81,7 @@ fn bench_get_page(c: &mut Criterion) {
 
     for slug in 0u64..100 {
         let keys = random_vec(32 * 128, &mut rng);
-        let outlier_indices = detect_outliers(&keys, 32, 128, 4);
+        let outlier_indices = detect_outliers(&keys, 32, 128, 4).unwrap();
         let compressed = sketch.quantize(&keys, 32, &outlier_indices);
         store.append(slug, slug * 10, &compressed).unwrap();
     }

@@ -56,7 +56,7 @@ impl<'a> KeyQuantizer<'a> {
             let group_keys = &keys[start..end];
 
             let outlier_indices =
-                detect_outliers(group_keys, self.group_size, d, self.outlier_count);
+                detect_outliers(group_keys, self.group_size, d, self.outlier_count).unwrap();
             let compressed = self
                 .sketch
                 .quantize(group_keys, self.group_size, &outlier_indices);
@@ -93,7 +93,7 @@ impl<'a> KeyQuantizer<'a> {
             let group_keys = &self.residual[start..end];
 
             let outlier_indices =
-                detect_outliers(group_keys, self.group_size, d, self.outlier_count);
+                detect_outliers(group_keys, self.group_size, d, self.outlier_count).unwrap();
             let compressed = self
                 .sketch
                 .quantize(group_keys, self.group_size, &outlier_indices);

@@ -26,7 +26,7 @@ fn bench_key_quantize(c: &mut Criterion) {
 
     for num_vectors in [32, 128, 512] {
         let keys = random_vec(num_vectors * d, &mut rng);
-        let outlier_indices = detect_outliers(&keys, num_vectors, d, 4);
+        let outlier_indices = detect_outliers(&keys, num_vectors, d, 4).unwrap();
 
         group.bench_with_input(
             BenchmarkId::new("vectors", num_vectors),

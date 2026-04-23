@@ -6,8 +6,7 @@ Source material and research analysis.
 
 | Document | What it covers |
 |----------|----------------|
-| [study/README.md](study/README.md) | TurboQuant overview, DKR vs RAG thesis |
-| [study/article.md](study/article.md) | Source article (Towards Data Science) |
+| [study.md](study.md) | TurboQuant overview, DKR vs RAG thesis, source article |
 
 ## Design
 

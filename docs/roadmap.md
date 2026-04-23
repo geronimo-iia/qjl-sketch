@@ -156,21 +156,23 @@ Keys and values in separate files with independent indexes.
 
 ### 3c — Value store
 
-- [ ] `src/store/kv.rs`: `ValueStore` struct (same file, similar pattern)
-- [ ] `ValueStore::create(dir, bits, group_size)`
-- [ ] `ValueStore::open(dir)`
-- [ ] `append(slug_hash, content_hash, compressed_values)`
-- [ ] `get_page(slug_hash) → Option<ValuePageView>`
-- [ ] `ValuePageView` — accessors for packed, scale, mn
-- [ ] Tests: write-read round-trip, quantized_dot survives persistence
+- [x] `src/store/value_store.rs`: `ValueStore` struct
+- [x] `ValueStore::create(dir, bits, group_size)`
+- [x] `ValueStore::open(dir)`
+- [x] `append(slug_hash, content_hash, compressed_values)`
+- [x] `get_page(slug_hash) → Option<ValuePageView>`
+- [x] `ValuePageView` — accessors for packed, scale, mn
+- [x] Tests: create/open, append/get, page not found, quantized_dot
+      survives persistence, multiple pages, reopen, staleness,
+      update overwrites (8 tests)
 
 ### 3d — Update and staleness
 
-- [ ] `is_fresh(slug_hash, content_hash) → bool` on both stores
-- [ ] Append with higher generation, old entry becomes dead
-- [ ] `dead_bytes()` / `live_bytes()` in index header
-- [ ] Tests: update overwrites old, dead space tracked, staleness
-      detection, keys fresh but values stale
+- [x] `is_fresh(slug_hash, content_hash) → bool` on both stores
+- [x] Append with higher generation, old entry becomes dead
+- [x] `dead_bytes()` / `live_bytes()` in index header
+- [x] Tests: keys fresh but values stale, independent lifecycle,
+      dead bytes tracked after reopen (3 integration tests)
 
 ### 3e — Compaction
 

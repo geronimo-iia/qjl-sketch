@@ -127,7 +127,7 @@ mod tests {
     fn test_score_identical_vectors() {
         let d = 64;
         let s = 512;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut rng = ChaCha20Rng::seed_from_u64(123);
         let v = random_vec(d, &mut rng);
 
@@ -148,7 +148,7 @@ mod tests {
     fn test_score_sign_preserved() {
         let d = 64;
         let s = 512;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut rng = ChaCha20Rng::seed_from_u64(123);
 
         let q = random_vec(d, &mut rng);
@@ -171,7 +171,7 @@ mod tests {
     fn test_score_multiple_vectors() {
         let d = 16;
         let s = 128;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut rng = ChaCha20Rng::seed_from_u64(77);
 
         let q = random_vec(d, &mut rng);

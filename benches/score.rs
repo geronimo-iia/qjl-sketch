@@ -18,7 +18,7 @@ fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
 fn bench_score(c: &mut Criterion) {
     let d = 128;
     let s = 256;
-    let sketch = QJLSketch::new(d, s, 64, 42);
+    let sketch = QJLSketch::new(d, s, 64, 42).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(100);
     let query = random_vec(d, &mut rng);
 
@@ -52,7 +52,7 @@ fn bench_score(c: &mut Criterion) {
 fn bench_score_single(c: &mut Criterion) {
     let d = 128;
     let s = 256;
-    let sketch = QJLSketch::new(d, s, 64, 42);
+    let sketch = QJLSketch::new(d, s, 64, 42).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(200);
     let query = random_vec(d, &mut rng);
 

@@ -19,7 +19,7 @@ fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
 fn bench_key_quantize(c: &mut Criterion) {
     let d = 128;
     let s = 256;
-    let sketch = QJLSketch::new(d, s, 64, 42);
+    let sketch = QJLSketch::new(d, s, 64, 42).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(100);
 
     let mut group = c.benchmark_group("key_quantize");
@@ -74,7 +74,9 @@ fn bench_sketch_creation(c: &mut Criterion) {
             BenchmarkId::new("dim", format!("{d}x{s}")),
             &(d, s),
             |b, &(d, s)| {
-                b.iter(|| QJLSketch::new(black_box(d), black_box(s), black_box(s / 4), 42));
+                b.iter(|| {
+                    QJLSketch::new(black_box(d), black_box(s), black_box(s / 4), 42).unwrap()
+                });
             },
         );
     }

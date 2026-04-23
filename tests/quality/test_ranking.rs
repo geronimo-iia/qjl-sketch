@@ -10,7 +10,7 @@ fn test_top_k_recall() {
     let num_keys = 200;
     let k = 10;
     let num_trials = 100;
-    let sketch = QJLSketch::new(d, s, s, 42);
+    let sketch = QJLSketch::new(d, s, s, 42).unwrap();
 
     let mut recall_sum = 0.0f32;
 
@@ -49,7 +49,7 @@ fn test_kendall_tau() {
     let s = 256;
     let num_keys = 100;
     let num_trials = 50;
-    let sketch = QJLSketch::new(d, s, s, 42);
+    let sketch = QJLSketch::new(d, s, s, 42).unwrap();
 
     let mut tau_sum = 0.0f32;
 

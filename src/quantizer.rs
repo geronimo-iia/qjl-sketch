@@ -172,7 +172,7 @@ mod tests {
     fn test_build_sketch() {
         let d = 16;
         let s = 64;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut quantizer = KeyQuantizer::new(&sketch, 2, 8, 8);
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);
@@ -188,7 +188,7 @@ mod tests {
     fn test_build_sketch_with_remainder() {
         let d = 16;
         let s = 64;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut quantizer = KeyQuantizer::new(&sketch, 2, 8, 8);
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);
@@ -204,7 +204,7 @@ mod tests {
     fn test_stream_residual_buffer() {
         let d = 16;
         let s = 64;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut quantizer = KeyQuantizer::new(&sketch, 2, 8, 8);
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);
@@ -222,7 +222,7 @@ mod tests {
     fn test_stream_buffer_flush() {
         let d = 16;
         let s = 64;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut quantizer = KeyQuantizer::new(&sketch, 2, 8, 8);
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);
@@ -240,7 +240,7 @@ mod tests {
     fn test_stream_matches_batch() {
         let d = 16;
         let s = 128;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);
         let keys = random_keys(16, d, &mut rng);
@@ -273,7 +273,7 @@ mod tests {
     fn test_attention_score_length() {
         let d = 16;
         let s = 64;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
         let mut quantizer = KeyQuantizer::new(&sketch, 2, 8, 8);
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);

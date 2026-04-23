@@ -4,7 +4,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 fn measure_distortion(d: usize, s: usize, trials: usize, seed: u64) -> f64 {
-    let sketch = QJLSketch::new(d, s, s, 42);
+    let sketch = QJLSketch::new(d, s, s, 42).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(seed);
 
     let mut mse_sum = 0.0f64;

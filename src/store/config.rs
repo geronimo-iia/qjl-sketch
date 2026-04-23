@@ -60,6 +60,7 @@ impl KeysConfig {
             self.outlier_sketch_dim as usize,
             self.seed,
         )
+        .expect("KeysConfig contains invalid sketch params")
     }
 }
 

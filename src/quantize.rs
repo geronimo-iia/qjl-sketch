@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_quantize_output_shape() {
-        let sketch = QJLSketch::new(16, 32, 16, 42);
+        let sketch = QJLSketch::new(16, 32, 16, 42).unwrap();
         let num_vectors = 4;
         let keys = vec![1.0f32; num_vectors * 16];
         let outlier_indices = vec![0u8, 1];
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_quantize_norms() {
-        let sketch = QJLSketch::new(4, 8, 8, 42);
+        let sketch = QJLSketch::new(4, 8, 8, 42).unwrap();
         let keys = vec![3.0, 0.0, 4.0, 0.0]; // norm = 5
         let outlier_indices = vec![2u8]; // dim 2 is outlier (value=4)
 
@@ -184,7 +184,7 @@ mod tests {
     fn test_quantize_outlier_separation() {
         let d = 8;
         let s = 16;
-        let sketch = QJLSketch::new(d, s, s, 42);
+        let sketch = QJLSketch::new(d, s, s, 42).unwrap();
 
         // Vector with all energy in dim 0 (outlier) and dim 4 (inlier)
         let mut keys = vec![0.0f32; d];

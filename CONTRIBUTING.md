@@ -1,4 +1,4 @@
-# Contributing to turboquant
+# Contributing to qjl-sketch
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ cargo audit                      # security audit
 
 ## No LLM Dependency Rule
 
-turboquant compresses and scores vectors. It makes zero LLM calls and
+qjl-sketch compresses and scores vectors. It makes zero LLM calls and
 has no opinion about how vectors are produced. Do not add any LLM
 client, tokenizer, or model-loading crate as a dependency.
 

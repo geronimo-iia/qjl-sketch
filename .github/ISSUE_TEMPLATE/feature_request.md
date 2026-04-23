@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Propose a new capability for turboquant
+about: Propose a new capability for qjl-sketch
 labels: enhancement
 ---
 

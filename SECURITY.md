@@ -17,7 +17,7 @@ prioritized based on severity and released as a patch version.
 
 ## Scope
 
-turboquant is a library crate. It does not make network requests,
+qjl-sketch is a library crate. It does not make network requests,
 store credentials, or run user-supplied code. The main attack surface is:
 
 - Malformed input vectors or store files processed by the library

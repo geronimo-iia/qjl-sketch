@@ -1,12 +1,12 @@
 ---
 name: Bug report
-about: Report incorrect behaviour in turboquant
+about: Report incorrect behaviour in qjl-sketch
 labels: bug
 ---
 
 ## Environment
 
-- turboquant version:
+- qjl-sketch version:
 - OS and architecture:
 - Rust version (`rustc --version`):
 

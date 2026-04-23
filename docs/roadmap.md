@@ -2,7 +2,7 @@
 
 ## Goal
 
-A standalone Rust crate (`turboquant`) that compresses vectors via the
+A standalone Rust crate (`qjl-sketch`) that compresses vectors via the
 TurboQuant pipeline and scores queries against compressed stores —
 no LLM, no GPU, CPU-only. Testable end-to-end: compress vectors,
 persist, reload, score, verify ranking preservation.
@@ -11,7 +11,7 @@ persist, reload, score, verify ranking preservation.
 
 Set up the crate, CI, and test harness.
 
-- [x] `cargo init --lib turboquant` in `projects/turboquant/`
+- [x] `cargo init --lib qjl-sketch` in `projects/qjl-sketch/`
 - [x] Cargo.toml: edition 2021, rust-version 1.95, MIT OR Apache-2.0
 - [x] Dependencies: `nalgebra`, `rand`, `rand_distr`, `bytemuck`, `rayon`, `memmap2`, `blake3`
 - [x] Dev-dependencies: `tempfile`, `approx`
@@ -221,7 +221,7 @@ the [llm-wiki](https://github.com/geronimo-iia/llm-wiki) project.
 ## Project Structure (target)
 
 ```
-projects/turboquant/
+projects/qjl-sketch/
 ├── study/                  ← source material
 │   ├── README.md
 │   └── article.md

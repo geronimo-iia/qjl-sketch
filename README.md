@@ -1,4 +1,4 @@
-# turboquant
+# qjl-sketch
 
 TurboQuant vector compression in Rust — sign-based hashing with
 near-optimal distortion rate.
@@ -26,8 +26,8 @@ and [QJL](https://github.com/amirzandieh/QJL) (Zandieh et al., 2024).
 ## Quick Start
 
 ```rust
-use turboquant::sketch::QJLSketch;
-use turboquant::outliers::detect_outliers;
+use qjl_sketch::sketch::QJLSketch;
+use qjl_sketch::outliers::detect_outliers;
 
 // Create a sketch (deterministic from seed)
 let sketch = QJLSketch::new(128, 256, 64, 42);
@@ -43,8 +43,8 @@ let scores = sketch.score(&query, &compressed);
 ### Persistence
 
 ```rust
-use turboquant::store::config::KeysConfig;
-use turboquant::store::key_store::KeyStore;
+use qjl_sketch::store::config::KeysConfig;
+use qjl_sketch::store::key_store::KeyStore;
 
 let config = KeysConfig { head_dim: 128, sketch_dim: 256,
                            outlier_sketch_dim: 64, seed: 42 };

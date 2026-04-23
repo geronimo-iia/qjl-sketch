@@ -24,9 +24,9 @@ share a directory but operate independently.
 ### Create
 
 ```rust
-use turboquant::store::config::{KeysConfig, ValuesConfig};
-use turboquant::store::key_store::KeyStore;
-use turboquant::store::value_store::ValueStore;
+use qjl_sketch::store::config::{KeysConfig, ValuesConfig};
+use qjl_sketch::store::key_store::KeyStore;
+use qjl_sketch::store::value_store::ValueStore;
 
 let dir = Path::new("/path/to/store");
 
@@ -66,8 +66,8 @@ On open:
 ### Compress and store a page
 
 ```rust
-use turboquant::outliers::detect_outliers;
-use turboquant::values::quantize_values;
+use qjl_sketch::outliers::detect_outliers;
+use qjl_sketch::values::quantize_values;
 
 let slug_hash: u64 = blake3_hash_of_slug;
 let content_hash: u64 = blake3_hash_of_page_content;

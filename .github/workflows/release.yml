@@ -28,7 +28,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Test
-        run: cargo test --locked
+        run: cargo test
 
   publish:
     needs: test
@@ -42,4 +42,4 @@ jobs:
           toolchain: "1.95"
 
       - name: Publish to crates.io
-        run: cargo publish --locked --token ${{ secrets.CARGO_TOKEN }}
+        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}

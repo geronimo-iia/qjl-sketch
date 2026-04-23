@@ -33,10 +33,10 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Build
-        run: cargo build --locked
+        run: cargo build
 
       - name: Test
-        run: cargo test --locked
+        run: cargo test
 
       - name: Install cargo-audit
         if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'

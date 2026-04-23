@@ -1,4 +1,4 @@
-// Packed-file persistence — append-only store with mmap loading
+// Persistence — append-only stores with mmap loading
 
 pub mod config;
-pub mod kv;
+pub mod key_store;

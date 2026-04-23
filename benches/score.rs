@@ -1,9 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use qjl_sketch::outliers::detect_outliers;
+use qjl_sketch::sketch::QJLSketch;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rand_distr::{Distribution, StandardNormal};
-use turboquant::outliers::detect_outliers;
-use turboquant::sketch::QJLSketch;
 
 fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
     let normal: StandardNormal = StandardNormal;

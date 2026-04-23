@@ -1,7 +1,7 @@
-use turboquant::store::config::{KeysConfig, ValuesConfig};
-use turboquant::store::key_store::KeyStore;
-use turboquant::store::value_store::ValueStore;
-use turboquant::values::{quantize_values, quantized_dot};
+use qjl_sketch::store::config::{KeysConfig, ValuesConfig};
+use qjl_sketch::store::key_store::KeyStore;
+use qjl_sketch::store::value_store::ValueStore;
+use qjl_sketch::values::{quantize_values, quantized_dot};
 
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;

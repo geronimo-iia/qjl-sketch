@@ -1,11 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use qjl_sketch::outliers::detect_outliers;
+use qjl_sketch::store::config::KeysConfig;
+use qjl_sketch::store::key_store::KeyStore;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rand_distr::{Distribution, StandardNormal};
 use tempfile::tempdir;
-use turboquant::outliers::detect_outliers;
-use turboquant::store::config::KeysConfig;
-use turboquant::store::key_store::KeyStore;
 
 fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
     let normal: StandardNormal = StandardNormal;

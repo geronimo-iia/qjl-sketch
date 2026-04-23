@@ -1,9 +1,9 @@
 [package]
-name = "turboquant"
+name = "qjl-sketch"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.95"
-description = "TurboQuant vector compression — sign-based hashing with near-optimal distortion rate"
+description = "QJL sign-based vector compression and scoring with near-optimal distortion rate"
 authors = ["Jerome Guibert <jguibert@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/geronimo-iia/turboquant"
@@ -15,7 +15,7 @@ categories = ["algorithms", "science", "compression"]
 exclude = [".github/", "tests/", "docs/"]
 
 [lib]
-name = "turboquant"
+name = "qjl_sketch"
 path = "src/lib.rs"
 
 [dependencies]

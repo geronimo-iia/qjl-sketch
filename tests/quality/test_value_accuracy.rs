@@ -1,7 +1,7 @@
 use super::helpers::*;
+use qjl_sketch::values::{quantize_values, quantized_dot};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use turboquant::values::{quantize_values, quantized_dot};
 
 fn measure_value_error(bits: u8, trials: usize, seed: u64) -> f64 {
     let group_size = 32;

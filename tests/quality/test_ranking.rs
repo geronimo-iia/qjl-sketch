@@ -1,7 +1,7 @@
 use super::helpers::*;
+use qjl_sketch::sketch::QJLSketch;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use turboquant::sketch::QJLSketch;
 
 #[test]
 fn test_top_k_recall() {

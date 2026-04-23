@@ -1,7 +1,7 @@
 use super::helpers::*;
+use qjl_sketch::sketch::QJLSketch;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use turboquant::sketch::QJLSketch;
 
 fn measure_distortion_with_outliers(
     d: usize,

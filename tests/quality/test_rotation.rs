@@ -1,7 +1,7 @@
 use super::helpers::*;
+use qjl_sketch::sketch::{l2_norm, matvec, QJLSketch};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use turboquant::sketch::{l2_norm, matvec, QJLSketch};
 
 #[test]
 fn test_rotation_preserves_norm() {

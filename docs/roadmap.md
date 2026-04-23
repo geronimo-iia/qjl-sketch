@@ -195,22 +195,7 @@ Keys and values in separate files with independent indexes.
 
 ### Milestone: 75 tests — compress → persist → reload → score = same result ✓
 
-## Phase 4 — Pipeline
-
-Wire everything into the query pipeline from `design/pipeline.md`.
-
-- [ ] `src/pipeline.rs`: `Pipeline` struct
-- [ ] `Pipeline::compress_page(tokens, slug) → ()` — project + quantize + store
-- [ ] `Pipeline::query(query_tokens, top_k) → Vec<PageScore>` — project
-      query, scan store, rank by attention score
-- [ ] `Pipeline::recompress(slug)` — re-compress a single page
-- [ ] `Pipeline::rebuild()` — re-compress all pages from scratch
-- [ ] Tests: smoke test, relevant page ranks high, incremental update,
-      empty store, single token page
-
-### Milestone: `cargo test e2e` — search query → ranked pages with scores
-
-## Phase 5 — Performance
+## Phase 4 — Performance
 
 Not needed for correctness, but needed for practical use.
 
@@ -228,10 +213,10 @@ Not needed for correctness, but needed for practical use.
 ## Future
 
 - GPU score kernel via `wgpu` compute shaders
-- Integration with llm-wiki: `wiki_ingest` triggers compress,
-  `wiki_search` optionally uses TurboQuant scores as reranker
 - W_q / W_k / W_v weight loading from GGUF or safetensors
-- Hybrid mode: BM25 pre-filter + TurboQuant rerank
+
+Pipeline integration (BM25 pre-filter + TurboQuant rerank) lives in
+the [llm-wiki](https://github.com/geronimo-iia/llm-wiki) project.
 
 ## Project Structure (target)
 
@@ -255,14 +240,12 @@ projects/turboquant/
 │   ├── quantizer.rs         ← KeyQuantizer (batch + streaming)
 │   ├── store/
 │   │   ├── mod.rs
-│   │   ├── config.rs        ← StoreConfig, config.bin
-│   │   └── kv.rs            ← KVStore, append, compact, mmap
-│   └── pipeline.rs          ← Pipeline (compress, query, recompress)
+│   │   ├── config.rs        ← index headers, sketch params
+│   │   ├── key_store.rs     ← KeyStore, append, compact, mmap
+│   │   └── value_store.rs   ← ValueStore, append, compact, mmap
 ├── tests/
-│   ├── unit/
 │   ├── quality/
-│   ├── persistence/
-│   └── e2e/
+│   └── persistence/
 ├── benches/
 │   └── score.rs
 ├── article.md

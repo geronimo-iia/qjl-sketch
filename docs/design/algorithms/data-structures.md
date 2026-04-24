@@ -28,6 +28,21 @@ pub struct Codebook {
     pub bit_width: u8,                // 1..=8
 }
 
+// src/rotation.rs
+pub struct RandomRotation {
+    matrix: Vec<f32>,                 // d×d row-major orthogonal matrix
+    matrix_t: Vec<f32>,               // d×d transposed (cached)
+    pub dim: usize,
+}
+
+// src/mse_quant.rs
+pub struct MseQuantized {
+    pub indices: Vec<u8>,             // [num_vectors × dim] codebook indices
+    pub num_vectors: usize,
+    pub dim: usize,
+    pub bit_width: u8,
+}
+
 // src/values.rs
 pub struct CompressedValues {
     pub packed: Vec<i32>,             // bit-packed quantized values

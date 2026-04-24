@@ -1,9 +1,11 @@
 pub mod codebook;
 pub mod error;
 pub mod math;
+pub mod mse_quant;
 pub mod outliers;
 pub mod quantize;
 pub mod quantizer;
+pub mod rotation;
 pub mod score;
 pub mod sketch;
 pub mod store;

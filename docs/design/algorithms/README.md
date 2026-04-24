@@ -14,7 +14,9 @@ src/
 ├── values.rs       CompressedValues — min-max quantization, fused matmul
 ├── quantizer.rs    KeyQuantizer — batch + streaming wrapper
 ├── math.rs         Numerical helpers — lgamma, beta_pdf, normal_icdf, Simpson's rule
-└── codebook.rs     Codebook — Lloyd-Max optimal scalar quantization
+├── codebook.rs     Codebook — Lloyd-Max optimal scalar quantization
+├── rotation.rs     RandomRotation — d×d orthogonal decorrelation
+└── mse_quant.rs    MSE-optimal quantization — rotate + Lloyd-Max
 ```
 
 ## Algorithm index
@@ -30,6 +32,7 @@ src/
 | 7 | [Lloyd-Max Codebook](07-lloyd-max-codebook.md) | `codebook.rs`, `math.rs` | Optimal scalar quantization for sphere marginals |
 | 8 | [Compressed Scoring](08-compressed-scoring.md) | `score.rs` | Hamming-based cosine estimator |
 | 9 | [Streaming Quantizer](09-streaming-quantizer.md) | `quantizer.rs` | Batch + one-at-a-time compression |
+| 10 | [MSE Quantization](10-mse-quantization.md) | `rotation.rs`, `mse_quant.rs` | Rotate + Lloyd-Max per-coordinate |
 
 ## Cross-cutting
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `rotation` module — `RandomRotation` d×d orthogonal matrix via
+  Gaussian QR with sign correction (Haar-uniform construction)
+- `mse_quant` module — MSE-optimal vector quantization (TurboQuant Stage 1)
+  - `mse_quantize` — rotate + Lloyd-Max per-coordinate quantization
+  - `mse_dequantize` — centroid lookup + inverse rotation
+  - `mse_score` — score query against quantized vectors (rotate query
+    once, dot with dequantized rotated coordinates)
+  - `MseQuantized` struct
+- 14 new tests (7 rotation + 6 mse_quant + 1 quality)
+
 ## [0.3.0] — 2025-07-24
 
 ### Added

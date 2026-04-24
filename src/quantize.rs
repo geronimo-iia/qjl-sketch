@@ -4,6 +4,7 @@ use crate::sketch::{l2_norm, QJLSketch};
 
 /// Compressed key vectors — packed sign bits with outlier separation.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompressedKeys {
     /// Packed sign bits for inlier dimensions \[num_vectors, sketch_dim/8\].
     pub key_quant: Vec<u8>,

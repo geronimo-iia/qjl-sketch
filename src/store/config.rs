@@ -10,6 +10,7 @@ pub const VALUE_ENTRY_MAGIC: &[u8; 4] = b"TQVE";
 pub const INDEX_VERSION: u16 = 1;
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeysConfig {
     pub head_dim: u16,
     pub sketch_dim: u16,
@@ -61,6 +62,7 @@ impl KeysConfig {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ValuesConfig {
     pub bits: u8,
     pub group_size: u16,
@@ -96,6 +98,7 @@ impl ValuesConfig {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexEntry {
     pub slug_hash: u64,
     pub offset: u64,
@@ -128,6 +131,7 @@ impl IndexEntry {
 }
 
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexMeta {
     pub entry_count: u16,
     pub live_bytes: u32,

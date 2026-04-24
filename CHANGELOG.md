@@ -17,7 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mse_score` — score query against quantized vectors (rotate query
     once, dot with dequantized rotated coordinates)
   - `MseQuantized` struct
+- `serde` feature flag — optional `Serialize`/`Deserialize` on public structs
+  - Simple derives on `Codebook`, `MseQuantized`, `CompressedKeys`,
+    `CompressedValues`, `KeysConfig`, `ValuesConfig`, `IndexEntry`, `IndexMeta`
+  - Params-only custom serde on `QJLSketch` and `RandomRotation`
+    (serialize seed + dims, reconstruct matrices on deserialize)
+  - `KeyExportEntry` / `ValueExportEntry` for store export/import
+  - `KeyStore::iter_pages()` / `ValueStore::iter_pages()` — streaming export
+  - `KeyStore::import_entry()` / `ValueStore::import_entry()` — streaming import
+- `seed` field on `QJLSketch` and `RandomRotation` (stored for serialization)
 - 14 new tests (7 rotation + 6 mse_quant + 1 quality)
+- 12 serde round-trip tests (feature-gated)
+- 2 examples: `serde_roundtrip`, `store_export_import`
+- 3 examples: `basic_qjl`, `compressed_scoring`, `mse_quantization`
 
 ## [0.3.0] — 2025-07-24
 

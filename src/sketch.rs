@@ -14,6 +14,8 @@ pub struct QJLSketch {
     pub head_dim: usize,
     pub sketch_dim: usize,
     pub outlier_sketch_dim: usize,
+    /// RNG seed used to generate the projection (stored for serialization).
+    pub seed: u64,
     /// Orthogonalized projection matrix [head_dim, sketch_dim], row-major.
     /// Used to sketch queries: sketched_q = query @ proj_dir_score.
     pub proj_dir_score: Vec<f32>,
@@ -61,6 +63,7 @@ impl QJLSketch {
             head_dim,
             sketch_dim,
             outlier_sketch_dim,
+            seed,
             proj_dir_score,
             proj_dir_quant,
         })
@@ -143,6 +146,40 @@ pub fn matvec(mat: &[f32], rows: usize, cols: usize, vec: &[f32]) -> Vec<f32> {
 /// Compute the vector L2 norm.
 pub fn l2_norm(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum::<f32>().sqrt()
+}
+
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::QJLSketch;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    struct QJLSketchParams {
+        head_dim: usize,
+        sketch_dim: usize,
+        outlier_sketch_dim: usize,
+        seed: u64,
+    }
+
+    impl Serialize for QJLSketch {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            QJLSketchParams {
+                head_dim: self.head_dim,
+                sketch_dim: self.sketch_dim,
+                outlier_sketch_dim: self.outlier_sketch_dim,
+                seed: self.seed,
+            }
+            .serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for QJLSketch {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let p = QJLSketchParams::deserialize(deserializer)?;
+            QJLSketch::new(p.head_dim, p.sketch_dim, p.outlier_sketch_dim, p.seed)
+                .map_err(serde::de::Error::custom)
+        }
+    }
 }
 
 #[cfg(test)]

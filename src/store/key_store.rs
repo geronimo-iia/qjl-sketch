@@ -353,6 +353,36 @@ impl KeyStore {
     }
 }
 
+// ── Export / Import ───────────────────────────────────────────────────────────
+
+/// A single key page entry for export/import.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct KeyExportEntry {
+    pub slug_hash: u64,
+    pub content_hash: u64,
+    pub compressed: CompressedKeys,
+}
+
+impl KeyStore {
+    /// Iterate over all pages, yielding export entries one at a time.
+    pub fn iter_pages(&self) -> impl Iterator<Item = KeyExportEntry> + '_ {
+        self.index.iter().filter_map(|entry| {
+            let page = self.get_page(entry.slug_hash)?;
+            Some(KeyExportEntry {
+                slug_hash: entry.slug_hash,
+                content_hash: entry.content_hash,
+                compressed: page.to_compressed_keys(self.config.head_dim as usize),
+            })
+        })
+    }
+
+    /// Import a single export entry into the store.
+    pub fn import_entry(&mut self, entry: &KeyExportEntry) -> Result<()> {
+        self.append(entry.slug_hash, entry.content_hash, &entry.compressed)
+    }
+}
+
 // ── Entry serialization ───────────────────────────────────────────────────────
 
 /// Truncate a .bin file to the last valid entry.

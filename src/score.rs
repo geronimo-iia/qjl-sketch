@@ -467,14 +467,13 @@ mod tests {
         let compressed = sketch.quantize(&keys, num, &outlier_indices).unwrap();
 
         let batch = sketch.score_compressed(&compressed, &compressed).unwrap();
-        for i in 0..num {
+        for (i, &batch_score) in batch.iter().enumerate().take(num) {
             let pair = sketch
                 .score_compressed_pair(&compressed, i, &compressed, i)
                 .unwrap();
             assert!(
-                (batch[i] - pair).abs() < 1e-6,
-                "mismatch at {i}: batch={}, pair={pair}",
-                batch[i]
+                (batch_score - pair).abs() < 1e-6,
+                "mismatch at {i}: batch={batch_score}, pair={pair}"
             );
         }
     }

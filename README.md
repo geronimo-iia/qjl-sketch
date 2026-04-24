@@ -14,14 +14,22 @@ and [QJL](https://github.com/amirzandieh/QJL) (Zandieh et al., 2024).
 
 - **QJL sign-based key compression** — outlier/inlier separation,
   packed 1 bit per projection
+- **Compressed-vs-compressed scoring** — Hamming cosine estimator
+  for page-to-page similarity (no decompression needed)
+- **Lloyd-Max codebook** — optimal scalar quantization for
+  unit-sphere coordinate marginals (1–8 bit)
+- **MSE-optimal quantization** — random rotation + Lloyd-Max
+  per-coordinate (TurboQuant Stage 1)
 - **Min-max value quantization** — 2-bit or 4-bit with i32 bit-packing
 - **Score without decompressing** — signed dot product with
   `sqrt(π/2)/s` scale factor, matches the QJL CUDA kernel
 - **Streaming quantizer** — batch or one-vector-at-a-time compression
 - **Append-only persistence** — mmap-based KeyStore and ValueStore
-  with zero-copy page views
+  with zero-copy page views, streaming export/import
 - **Crash recovery** — truncated tail detection, index rebuild
 - **Compaction** — reclaim dead space with atomic rename
+- **Optional serde** — `Serialize`/`Deserialize` on all public structs
+  (feature-gated behind `serde`)
 
 ## Quick Start
 
@@ -90,26 +98,46 @@ Quality improves with larger sketch_dim.
 
 ## Documentation
 
-| Document                                                 | What it covers                |
-| -------------------------------------------------------- | ----------------------------- |
-| [docs/study.md](docs/study.md)                           | TurboQuant algorithm overview |
-| [docs/design/algorithms.md](docs/design/algorithms.md)   | 7 algorithms with pseudocode  |
-| [docs/design/persistence.md](docs/design/persistence.md) | Two-store file format         |
-| [docs/design/store.md](docs/design/store.md)             | Store API and lifecycle       |
-| [docs/design/benchmarks.md](docs/design/benchmarks.md)   | Benchmark suite and results   |
-| [docs/design/testing.md](docs/design/testing.md)         | Test strategy                 |
-| [docs/roadmap.md](docs/roadmap.md)                       | Development roadmap           |
+| Document                                                    | What it covers                        |
+| ----------------------------------------------------------- | ------------------------------------- |
+| [docs/study.md](docs/study.md)                              | TurboQuant algorithm overview         |
+| [docs/design/algorithms/](docs/design/algorithms/README.md) | Algorithm catalog with pseudocode     |
+| [docs/design/persistence.md](docs/design/persistence.md)    | Two-store file format                 |
+| [docs/design/store.md](docs/design/store.md)                | Store API and lifecycle               |
+| [docs/design/serde.md](docs/design/serde.md)                | Serde support and store export/import |
+| [docs/design/benchmarks.md](docs/design/benchmarks.md)      | Benchmark suite and results           |
+| [docs/design/testing.md](docs/design/testing.md)            | Test strategy                         |
+| [docs/roadmap.md](docs/roadmap.md)                          | Development roadmap                   |
+
+## Examples
+
+| Example                                                | Command                                                    | What it shows                                                     |
+| ------------------------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| [basic_qjl](examples/basic_qjl.rs)                     | `cargo run --example basic_qjl`                            | Compress vectors, score queries, compare with exact dot products  |
+| [compressed_scoring](examples/compressed_scoring.rs)   | `cargo run --example compressed_scoring`                   | Page-to-page similarity via Hamming cosine on sign bits           |
+| [mse_quantization](examples/mse_quantization.rs)       | `cargo run --example mse_quantization`                     | Rotation + Lloyd-Max quantization, 2-bit vs 4-bit MSE comparison  |
+| [serde_roundtrip](examples/serde_roundtrip.rs)         | `cargo run --example serde_roundtrip --features serde`     | Serialize/deserialize Codebook, QJLSketch, RandomRotation to JSON |
+| [store_export_import](examples/store_export_import.rs) | `cargo run --example store_export_import --features serde` | Streaming JSONL export from one KeyStore, import into another     |
 
 ## Building
 
 ```bash
-cargo build                      # debug
-cargo test                       # 93 tests (~8s)
-cargo bench                      # criterion benchmarks (release)
-cargo clippy -- -D warnings      # lint
+cargo build                           # debug
+cargo test                            # all tests (default features)
+cargo test --features serde           # include serde round-trip tests
+cargo bench                           # criterion benchmarks (release)
+cargo clippy -- -D warnings           # lint
+cargo run --example serde_roundtrip --features serde
+cargo run --example store_export_import --features serde
 ```
 
 Requires Rust 1.95+.
+
+### Feature flags
+
+| Flag    | Default | What it enables                                                  |
+| ------- | ------- | ---------------------------------------------------------------- |
+| `serde` | off     | `Serialize`/`Deserialize` on public structs, store export/import |
 
 ## License
 

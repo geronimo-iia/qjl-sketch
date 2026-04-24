@@ -15,6 +15,7 @@ use crate::math::{beta_pdf, sample_beta_marginal, simpson_integrate};
 /// 2^bit_width - 1 decision boundaries, optimized for the Beta(1/2, (d-1)/2)
 /// coordinate marginal of unit-sphere-uniform vectors.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Codebook {
     /// Quantization centroids (reconstruction values), length = 2^bit_width.
     pub centroids: Vec<f32>,

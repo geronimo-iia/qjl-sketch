@@ -2,6 +2,7 @@ use crate::error::{validate_finite, QjlError, Result};
 
 /// Compressed value vectors — min-max quantized and bit-packed.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompressedValues {
     /// Bit-packed quantized values. Layout depends on bits.
     pub packed: Vec<i32>,

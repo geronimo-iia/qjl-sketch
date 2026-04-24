@@ -10,6 +10,7 @@ use crate::rotation::RandomRotation;
 
 /// MSE-quantized vectors: per-coordinate codebook indices after rotation.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MseQuantized {
     /// Codebook indices, flattened \[num_vectors × dim\].
     pub indices: Vec<u8>,

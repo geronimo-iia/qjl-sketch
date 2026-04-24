@@ -19,6 +19,7 @@ Architecture and implementation decisions.
 | [design/store.md](design/store.md)                | Store API usage, lifecycle, error handling, crash safety       |
 | [design/benchmarks.md](design/benchmarks.md)      | Benchmark suite, baseline results, optimization targets        |
 | [design/testing.md](design/testing.md)            | 4-layer test strategy                                          |
+| [design/serde.md](design/serde.md)                | Serde support, feature flag, store export/import               |
 
 ## Guides
 

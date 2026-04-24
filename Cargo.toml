@@ -27,11 +27,17 @@ bytemuck = { version = "1.16", features = ["derive"] }
 rayon = "1.10"
 memmap2 = "0.9"
 blake3 = "1.5"
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
 approx = "0.5"
 criterion = { version = "0.8", features = ["html_reports"] }
+serde_json = "1"
+
+[features]
+default = []
+serde = ["dep:serde"]
 
 [[bench]]
 name = "score"
@@ -44,6 +50,23 @@ harness = false
 [[bench]]
 name = "store"
 harness = false
+
+[[example]]
+name = "basic_qjl"
+
+[[example]]
+name = "compressed_scoring"
+
+[[example]]
+name = "mse_quantization"
+
+[[example]]
+name = "serde_roundtrip"
+required-features = ["serde"]
+
+[[example]]
+name = "store_export_import"
+required-features = ["serde"]
 
 [profile.release]
 opt-level = 3

@@ -24,6 +24,8 @@ pub struct RandomRotation {
     matrix_t: Vec<f32>,
     /// Vector dimension.
     pub dim: usize,
+    /// RNG seed used to generate the rotation (stored for serialization).
+    pub seed: u64,
 }
 
 impl RandomRotation {
@@ -70,6 +72,7 @@ impl RandomRotation {
             matrix,
             matrix_t,
             dim,
+            seed,
         })
     }
 
@@ -110,6 +113,35 @@ fn matvec_square(mat: &[f32], dim: usize, x: &[f32]) -> Vec<f32> {
         out[r] = acc;
     }
     out
+}
+
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::RandomRotation;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    struct RandomRotationParams {
+        dim: usize,
+        seed: u64,
+    }
+
+    impl Serialize for RandomRotation {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            RandomRotationParams {
+                dim: self.dim,
+                seed: self.seed,
+            }
+            .serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for RandomRotation {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let p = RandomRotationParams::deserialize(deserializer)?;
+            RandomRotation::new(p.dim, p.seed).map_err(serde::de::Error::custom)
+        }
+    }
 }
 
 #[cfg(test)]

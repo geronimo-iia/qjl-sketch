@@ -16,7 +16,7 @@ pub enum QjlError {
     /// Store file has unsupported version.
     StoreVersionMismatch { expected: u16, got: u16 },
     /// Outlier index out of range.
-    OutlierIndexOutOfRange { index: u8, head_dim: usize },
+    OutlierIndexOutOfRange { index: u8, dim: usize },
     /// Codebook bit width is invalid (must be 1..=8).
     InvalidCodebookBitWidth(u8),
     /// Dimension is invalid (must be > 0).
@@ -56,11 +56,8 @@ impl fmt::Display for QjlError {
             Self::StoreVersionMismatch { expected, got } => {
                 write!(f, "store version mismatch: expected {expected}, got {got}")
             }
-            Self::OutlierIndexOutOfRange { index, head_dim } => {
-                write!(
-                    f,
-                    "outlier index {index} out of range for head_dim {head_dim}"
-                )
+            Self::OutlierIndexOutOfRange { index, dim } => {
+                write!(f, "outlier index {index} out of range for dim {dim}")
             }
             Self::InvalidCodebookBitWidth(bits) => {
                 write!(f, "invalid codebook bit width: {bits} (must be 1..=8)")
@@ -133,7 +130,7 @@ mod tests {
             },
             QjlError::OutlierIndexOutOfRange {
                 index: 200,
-                head_dim: 128,
+                dim: 128,
             },
             QjlError::InvalidCodebookBitWidth(0),
             QjlError::InvalidDimension(0),

@@ -3,11 +3,11 @@
 ```rust
 // src/sketch.rs
 pub struct QJLSketch {
-    pub head_dim: usize,
+    pub dim: usize,
     pub sketch_dim: usize,
     pub outlier_sketch_dim: usize,
-    pub proj_dir_score: Vec<f32>,     // [head_dim, sketch_dim] row-major
-    pub proj_dir_quant: Vec<f32>,     // [sketch_dim, head_dim] row-major
+    pub proj_dir_score: Vec<f32>,     // [dim, sketch_dim] row-major
+    pub proj_dir_quant: Vec<f32>,     // [sketch_dim, dim] row-major
 }
 
 // src/quantize.rs
@@ -18,7 +18,7 @@ pub struct CompressedKeys {
     pub outlier_norms: Vec<f32>,      // [num_vectors]
     pub outlier_indices: Vec<u8>,     // [outlier_count] per group
     pub num_vectors: usize,
-    pub head_dim: usize,
+    pub dim: usize,
 }
 
 // src/codebook.rs

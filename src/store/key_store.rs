@@ -19,7 +19,7 @@ pub struct KeyStore {
 }
 
 /// Zero-copy view into a compressed key entry.
-pub struct KeyPageView<'a> {
+pub struct KeyEntryView<'a> {
     data: &'a [u8],
     pub num_vectors: u32,
     pub outlier_count: u8,
@@ -147,10 +147,10 @@ impl KeyStore {
 
         let entries = scan_key_entries(data_mmap.as_deref(), data_len);
 
-        // Deduplicate: keep highest generation per slug_hash
+        // Deduplicate: keep highest generation per entry_id
         let mut best: std::collections::HashMap<u64, IndexEntry> = std::collections::HashMap::new();
         for entry in entries {
-            best.entry(entry.slug_hash)
+            best.entry(entry.entry_id)
                 .and_modify(|existing| {
                     if entry.generation > existing.generation {
                         *existing = entry.clone();
@@ -159,7 +159,7 @@ impl KeyStore {
                 .or_insert(entry);
         }
         let mut index: Vec<IndexEntry> = best.into_values().collect();
-        index.sort_by_key(|e| e.slug_hash);
+        index.sort_by_key(|e| e.entry_id);
 
         let live_bytes = index.iter().map(|e| e.entry_len).sum::<u32>();
         let next_generation = index.iter().map(|e| e.generation).max().unwrap_or(0) + 1;
@@ -184,7 +184,7 @@ impl KeyStore {
     /// Append a compressed key entry to the store.
     pub fn append(
         &mut self,
-        slug_hash: u64,
+        entry_id: u64,
         content_hash: u64,
         compressed: &CompressedKeys,
     ) -> Result<()> {
@@ -201,8 +201,8 @@ impl KeyStore {
         data_file.write_all(&entry_data)?;
         data_file.sync_all()?;
 
-        // Track dead space if this slug already exists
-        if let Ok(pos) = self.index.binary_search_by_key(&slug_hash, |e| e.slug_hash) {
+        // Track dead space if this entry_id already exists
+        if let Ok(pos) = self.index.binary_search_by_key(&entry_id, |e| e.entry_id) {
             self.meta.dead_bytes += self.index[pos].entry_len;
             self.index.remove(pos);
             self.meta.entry_count -= 1;
@@ -212,7 +212,7 @@ impl KeyStore {
         let generation = self.next_generation;
         self.next_generation += 1;
         let new_entry = IndexEntry {
-            slug_hash,
+            entry_id,
             offset,
             entry_len,
             generation,
@@ -220,7 +220,7 @@ impl KeyStore {
         };
         let insert_pos = self
             .index
-            .binary_search_by_key(&slug_hash, |e| e.slug_hash)
+            .binary_search_by_key(&entry_id, |e| e.entry_id)
             .unwrap_err();
         self.index.insert(insert_pos, new_entry);
         self.meta.entry_count += 1;
@@ -237,11 +237,11 @@ impl KeyStore {
         Ok(())
     }
 
-    /// Look up a page by slug hash. Returns a zero-copy view.
-    pub fn get_page(&self, slug_hash: u64) -> Option<KeyPageView<'_>> {
+    /// Look up an entry by entry_id. Returns a zero-copy view.
+    pub fn get_entry(&self, entry_id: u64) -> Option<KeyEntryView<'_>> {
         let pos = self
             .index
-            .binary_search_by_key(&slug_hash, |e| e.slug_hash)
+            .binary_search_by_key(&entry_id, |e| e.entry_id)
             .ok()?;
         let entry = &self.index[pos];
         let mmap = self.data_mmap.as_ref()?;
@@ -250,23 +250,23 @@ impl KeyStore {
         if end > mmap.len() {
             return None;
         }
-        KeyPageView::parse(
+        KeyEntryView::parse(
             &mmap[start..end],
             self.config.sketch_dim as usize,
             self.config.outlier_sketch_dim as usize,
         )
     }
 
-    /// Check if a page's compressed keys are fresh.
-    pub fn is_fresh(&self, slug_hash: u64, content_hash: u64) -> bool {
+    /// Check if an entry's compressed keys are fresh.
+    pub fn is_fresh(&self, entry_id: u64, content_hash: u64) -> bool {
         self.index
-            .binary_search_by_key(&slug_hash, |e| e.slug_hash)
+            .binary_search_by_key(&entry_id, |e| e.entry_id)
             .ok()
             .map(|i| self.index[i].content_hash == content_hash)
             .unwrap_or(false)
     }
 
-    /// Number of pages in the store.
+    /// Number of entries in the store.
     pub fn len(&self) -> usize {
         self.index.len()
     }
@@ -276,10 +276,12 @@ impl KeyStore {
         self.index.is_empty()
     }
 
+    /// Bytes occupied by live entries (excludes dead space).
     pub fn live_bytes(&self) -> u32 {
         self.meta.live_bytes
     }
 
+    /// Bytes occupied by overwritten entries, reclaimable via `compact`.
     pub fn dead_bytes(&self) -> u32 {
         self.meta.dead_bytes
     }
@@ -355,48 +357,48 @@ impl KeyStore {
 
 // ── Export / Import ───────────────────────────────────────────────────────────
 
-/// A single key page entry for export/import.
+/// A single key entry for export/import.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyExportEntry {
-    pub slug_hash: u64,
+    pub entry_id: u64,
     pub content_hash: u64,
     pub compressed: CompressedKeys,
 }
 
 impl KeyStore {
-    /// Iterate over all pages, yielding export entries one at a time.
-    pub fn iter_pages(&self) -> impl Iterator<Item = KeyExportEntry> + '_ {
+    /// Iterate over all entries, yielding export entries one at a time.
+    pub fn iter_entries(&self) -> impl Iterator<Item = KeyExportEntry> + '_ {
         self.index.iter().filter_map(|entry| {
-            let page = self.get_page(entry.slug_hash)?;
+            let view = self.get_entry(entry.entry_id)?;
             Some(KeyExportEntry {
-                slug_hash: entry.slug_hash,
+                entry_id: entry.entry_id,
                 content_hash: entry.content_hash,
-                compressed: page.to_compressed_keys(self.config.head_dim as usize),
+                compressed: view.to_compressed(self.config.dim as usize),
             })
         })
     }
 
     /// Import a single export entry into the store.
     pub fn import_entry(&mut self, entry: &KeyExportEntry) -> Result<()> {
-        self.append(entry.slug_hash, entry.content_hash, &entry.compressed)
+        self.append(entry.entry_id, entry.content_hash, &entry.compressed)
     }
 
-    /// Score a query against all pages using float x sign scoring.
+    /// Score a token against all entries using float x sign scoring.
     ///
     /// Always uses the float x sign path (same as `sketch.score()`).
     /// - With `gpu` feature + adapter + enough vectors: single batched
     ///   GPU dispatch (fast).
-    /// - Without GPU: `sketch.score()` per page on CPU.
+    /// - Without GPU: `sketch.score()` per entry on CPU.
     ///
-    /// Returns (slug_hash, scores) pairs.
-    pub fn score_all_pages(
+    /// Returns (entry_id, scores) pairs.
+    pub fn scores(
         &self,
-        query: &[f32],
+        token: &[f32],
         sketch: &crate::sketch::QJLSketch,
         outlier_indices: &[u8],
     ) -> Result<Vec<(u64, Vec<f32>)>> {
-        let head_dim = self.config.head_dim as usize;
+        let dim = self.config.dim as usize;
         let _ = outlier_indices;
 
         #[cfg(feature = "gpu")]
@@ -404,67 +406,67 @@ impl KeyStore {
             let total_vectors: usize = self
                 .index
                 .iter()
-                .filter_map(|e| self.get_page(e.slug_hash))
+                .filter_map(|e| self.get_entry(e.entry_id))
                 .map(|p| p.num_vectors as usize)
                 .sum();
 
             if total_vectors >= crate::gpu::gpu_min_batch()
                 && crate::gpu::GpuContext::get().is_some()
             {
-                return self.score_all_pages_gpu_batch(query, sketch, head_dim);
+                return self.scores_gpu_batch(token, sketch, dim);
             }
         }
 
-        self.score_all_pages_cpu(query, sketch, head_dim)
+        self.scores_cpu(token, sketch, dim)
     }
 
-    /// CPU path: float x sign scoring via sketch.score() per page.
-    fn score_all_pages_cpu(
+    /// CPU path: float x sign scoring via sketch.score() per entry.
+    fn scores_cpu(
         &self,
-        query: &[f32],
+        token: &[f32],
         sketch: &crate::sketch::QJLSketch,
-        head_dim: usize,
+        dim: usize,
     ) -> Result<Vec<(u64, Vec<f32>)>> {
         let mut results = Vec::with_capacity(self.index.len());
         for entry in &self.index {
-            let page = match self.get_page(entry.slug_hash) {
+            let view = match self.get_entry(entry.entry_id) {
                 Some(p) => p,
                 None => continue,
             };
-            let keys = page.to_compressed_keys(head_dim);
-            let scores = sketch.score(query, &keys)?;
-            results.push((entry.slug_hash, scores));
+            let keys = view.to_compressed(dim);
+            let scores = sketch.score(token, &keys)?;
+            results.push((entry.entry_id, scores));
         }
         Ok(results)
     }
 
-    /// GPU path: batch all pages into a single GPU dispatch.
+    /// GPU path: batch all entries into a single GPU dispatch.
     #[cfg(feature = "gpu")]
-    fn score_all_pages_gpu_batch(
+    fn scores_gpu_batch(
         &self,
-        query: &[f32],
+        token: &[f32],
         sketch: &crate::sketch::QJLSketch,
-        head_dim: usize,
+        dim: usize,
     ) -> Result<Vec<(u64, Vec<f32>)>> {
         use crate::error::validate_finite;
         use crate::sketch::matvec;
 
-        let d = sketch.head_dim;
+        let d = sketch.dim;
         let s = sketch.sketch_dim;
         let os = sketch.outlier_sketch_dim;
 
-        validate_finite(query, "score_all_pages query")?;
+        validate_finite(token, "scores token")?;
 
-        let q_sketch = matvec(&sketch.proj_dir_quant, s, d, query);
+        let q_sketch = matvec(&sketch.proj_dir_quant, s, d, token);
         let mut q_outlier_sketch = vec![0.0f32; s];
         if let Some(first_entry) = self.index.first() {
-            if let Some(first_page) = self.get_page(first_entry.slug_hash) {
-                let first_keys = first_page.to_compressed_keys(head_dim);
+            if let Some(entry) = self.get_entry(first_entry.entry_id) {
+                let first_keys = entry.to_compressed(dim);
                 for &idx in &first_keys.outlier_indices {
                     let j = idx as usize;
                     let row_start = j * s;
                     for (p, qos) in q_outlier_sketch.iter_mut().enumerate().take(s) {
-                        *qos += query[j] * sketch.proj_dir_score[row_start + p];
+                        *qos += token[j] * sketch.proj_dir_score[row_start + p];
                     }
                 }
             }
@@ -482,15 +484,15 @@ impl KeyStore {
         let mut all_key_outlier_quant = Vec::new();
         let mut all_key_norms = Vec::new();
         let mut all_outlier_norms = Vec::new();
-        let mut page_boundaries: Vec<(u64, usize)> = Vec::new();
+        let mut entry_boundaries: Vec<(u64, usize)> = Vec::new();
 
         for entry in &self.index {
-            let page = match self.get_page(entry.slug_hash) {
+            let view = match self.get_entry(entry.entry_id) {
                 Some(p) => p,
                 None => continue,
             };
-            let keys = page.to_compressed_keys(head_dim);
-            page_boundaries.push((entry.slug_hash, keys.num_vectors));
+            let keys = view.to_compressed(dim);
+            entry_boundaries.push((entry.entry_id, keys.num_vectors));
             all_key_quant.extend_from_slice(&keys.key_quant);
             all_key_outlier_quant.extend_from_slice(&keys.key_outlier_quant);
             all_key_norms.extend_from_slice(&keys.key_norms);
@@ -517,12 +519,12 @@ impl KeyStore {
             scl_outlier,
         );
 
-        let mut results = Vec::with_capacity(page_boundaries.len());
+        let mut results = Vec::with_capacity(entry_boundaries.len());
         let mut offset = 0;
-        for (slug_hash, num_vectors) in page_boundaries {
-            let page_scores = all_scores[offset..offset + num_vectors].to_vec();
+        for (entry_id, num_vectors) in entry_boundaries {
+            let entry_scores = all_scores[offset..offset + num_vectors].to_vec();
             offset += num_vectors;
-            results.push((slug_hash, page_scores));
+            results.push((entry_id, entry_scores));
         }
 
         Ok(results)
@@ -592,7 +594,7 @@ fn scan_key_entries(data: Option<&[u8]>, data_len: u64) -> Vec<IndexEntry> {
         }
 
         entries.push(IndexEntry {
-            slug_hash: 0,
+            entry_id: 0,
             offset: offset as u64,
             entry_len: entry_len as u32,
             generation,
@@ -637,9 +639,9 @@ fn serialize_key_entry(compressed: &CompressedKeys) -> Vec<u8> {
     buf
 }
 
-// ── KeyPageView ───────────────────────────────────────────────────────────────
+// ── KeyEntryView ───────────────────────────────────────────────────────────────
 
-impl<'a> KeyPageView<'a> {
+impl<'a> KeyEntryView<'a> {
     fn parse(data: &'a [u8], sketch_dim: usize, outlier_sketch_dim: usize) -> Option<Self> {
         if data.len() < 16 {
             return None;
@@ -693,27 +695,32 @@ impl<'a> KeyPageView<'a> {
         self.key_norms_offset() + self.key_norms_len()
     }
 
+    /// Outlier dimension indices for this entry (`[outlier_count]`).
     pub fn outlier_indices(&self) -> &[u8] {
         let start = self.outlier_indices_offset();
         &self.data[start..start + self.outlier_count as usize]
     }
 
+    /// Packed inlier sign bits `[num_vectors, sketch_dim/8]`.
     pub fn key_quant(&self) -> &[u8] {
         let start = self.key_quant_offset();
         &self.data[start..start + self.key_quant_len()]
     }
 
+    /// Packed outlier sign bits `[num_vectors, outlier_sketch_dim/8]`.
     pub fn key_outlier_quant(&self) -> &[u8] {
         let start = self.key_outlier_quant_offset();
         &self.data[start..start + self.key_outlier_quant_len()]
     }
 
+    /// L2 norm of each full key vector `[num_vectors]`.
     pub fn key_norms(&self) -> Vec<f32> {
         let start = self.key_norms_offset();
         let count = self.num_vectors as usize;
         read_f32_slice(&self.data[start..start + count * 4], count)
     }
 
+    /// L2 norm of each vector's outlier components `[num_vectors]`.
     pub fn outlier_norms(&self) -> Vec<f32> {
         let start = self.outlier_norms_offset();
         let count = self.num_vectors as usize;
@@ -721,7 +728,7 @@ impl<'a> KeyPageView<'a> {
     }
 
     /// Reconstruct a `CompressedKeys` from the view (copies data).
-    pub fn to_compressed_keys(&self, head_dim: usize) -> CompressedKeys {
+    pub fn to_compressed(&self, dim: usize) -> CompressedKeys {
         CompressedKeys {
             key_quant: self.key_quant().to_vec(),
             key_outlier_quant: self.key_outlier_quant().to_vec(),
@@ -729,7 +736,7 @@ impl<'a> KeyPageView<'a> {
             outlier_norms: self.outlier_norms(),
             outlier_indices: self.outlier_indices().to_vec(),
             num_vectors: self.num_vectors as usize,
-            head_dim,
+            dim,
         }
     }
 }
@@ -765,7 +772,7 @@ mod tests {
 
     fn test_config() -> KeysConfig {
         KeysConfig {
-            head_dim: 16,
+            dim: 16,
             sketch_dim: 32,
             outlier_sketch_dim: 16,
             seed: 42,
@@ -796,28 +803,28 @@ mod tests {
         let outlier_indices = vec![0u8, 1];
         let compressed = sketch.quantize(&keys, 4, &outlier_indices).unwrap();
 
-        let slug_hash = 0xAABB;
+        let entry_id = 0xAABB;
         let content_hash = 0xCCDD;
-        store.append(slug_hash, content_hash, &compressed).unwrap();
+        store.append(entry_id, content_hash, &compressed).unwrap();
 
         assert_eq!(store.len(), 1);
-        let page = store.get_page(slug_hash).unwrap();
-        assert_eq!(page.num_vectors, 4);
-        assert_eq!(page.key_quant(), compressed.key_quant.as_slice());
-        assert_eq!(page.key_norms(), compressed.key_norms.as_slice());
-        assert_eq!(page.outlier_norms(), compressed.outlier_norms.as_slice());
+        let view = store.get_entry(entry_id).unwrap();
+        assert_eq!(view.num_vectors, 4);
+        assert_eq!(view.key_quant(), compressed.key_quant.as_slice());
+        assert_eq!(view.key_norms(), compressed.key_norms.as_slice());
+        assert_eq!(view.outlier_norms(), compressed.outlier_norms.as_slice());
         assert_eq!(
-            page.outlier_indices(),
+            view.outlier_indices(),
             compressed.outlier_indices.as_slice()
         );
     }
 
     #[test]
-    fn test_page_not_found() {
+    fn test_entry_not_found() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let store = KeyStore::create(dir.path(), config).unwrap();
-        assert!(store.get_page(0xDEAD).is_none());
+        assert!(store.get_entry(0xDEAD).is_none());
     }
 
     #[test]
@@ -829,63 +836,63 @@ mod tests {
 
         let mut rng = ChaCha20Rng::seed_from_u64(456);
         let keys = random_vec(8 * 16, &mut rng);
-        let query = random_vec(16, &mut rng);
+        let token = random_vec(16, &mut rng);
         let outlier_indices = vec![0u8];
         let compressed = sketch.quantize(&keys, 8, &outlier_indices).unwrap();
 
-        let scores_before = sketch.score(&query, &compressed).unwrap();
+        let scores_before = sketch.score(&token, &compressed).unwrap();
 
         store.append(0x1234, 0x5678, &compressed).unwrap();
 
         // Reopen from disk
         let store2 = KeyStore::open(dir.path()).unwrap();
         let sketch2 = store2.config.build_sketch();
-        let page = store2.get_page(0x1234).unwrap();
-        let reloaded = page.to_compressed_keys(config.head_dim as usize);
-        let scores_after = sketch2.score(&query, &reloaded).unwrap();
+        let view = store2.get_entry(0x1234).unwrap();
+        let reloaded = view.to_compressed(config.dim as usize);
+        let scores_after = sketch2.score(&token, &reloaded).unwrap();
 
         assert_eq!(scores_before, scores_after);
     }
 
     #[test]
-    fn test_multiple_pages() {
+    fn test_multiple_entries() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
         let sketch = config.build_sketch();
 
         let mut rng = ChaCha20Rng::seed_from_u64(789);
-        for slug in 0u64..5 {
+        for eid in 0u64..5 {
             let keys = random_vec(4 * 16, &mut rng);
             let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-            store.append(slug, slug * 100, &compressed).unwrap();
+            store.append(eid, eid * 100, &compressed).unwrap();
         }
 
         assert_eq!(store.len(), 5);
-        for slug in 0u64..5 {
-            assert!(store.get_page(slug).is_some());
+        for eid in 0u64..5 {
+            assert!(store.get_entry(eid).is_some());
         }
-        assert!(store.get_page(99).is_none());
+        assert!(store.get_entry(99).is_none());
     }
 
     #[test]
-    fn test_reopen_preserves_all_pages() {
+    fn test_reopen_preserves_all_entries() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
         let sketch = config.build_sketch();
 
         let mut rng = ChaCha20Rng::seed_from_u64(111);
-        for slug in 0u64..3 {
+        for eid in 0u64..3 {
             let keys = random_vec(4 * 16, &mut rng);
             let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-            store.append(slug, slug, &compressed).unwrap();
+            store.append(eid, eid, &compressed).unwrap();
         }
 
         let store2 = KeyStore::open(dir.path()).unwrap();
         assert_eq!(store2.len(), 3);
-        for slug in 0u64..3 {
-            assert!(store2.get_page(slug).is_some());
+        for eid in 0u64..3 {
+            assert!(store2.get_entry(eid).is_some());
         }
     }
 
@@ -929,7 +936,7 @@ mod tests {
     }
 
     #[test]
-    fn test_score_all_pages() {
+    fn test_scores() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
@@ -937,41 +944,39 @@ mod tests {
 
         let mut rng = ChaCha20Rng::seed_from_u64(900);
         let outlier_indices = vec![0u8];
-        for slug in 0u64..3 {
+        for eid in 0u64..3 {
             let keys = random_vec(4 * 16, &mut rng);
             let compressed = sketch.quantize(&keys, 4, &outlier_indices).unwrap();
-            store.append(slug, slug * 100, &compressed).unwrap();
+            store.append(eid, eid * 100, &compressed).unwrap();
         }
 
-        let query = random_vec(16, &mut rng);
-        let results = store
-            .score_all_pages(&query, &sketch, &outlier_indices)
-            .unwrap();
+        let token = random_vec(16, &mut rng);
+        let results = store.scores(&token, &sketch, &outlier_indices).unwrap();
 
         assert_eq!(results.len(), 3);
-        for (slug_hash, scores) in &results {
+        for (entry_id, scores) in &results {
             assert_eq!(scores.len(), 4);
             for s in scores {
-                assert!(s.is_finite(), "non-finite score for slug {slug_hash}");
+                assert!(s.is_finite(), "non-finite score for entry {entry_id}");
             }
         }
     }
 
     #[test]
-    fn test_score_all_pages_empty_store() {
+    fn test_scores_empty_store() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let store = KeyStore::create(dir.path(), config.clone()).unwrap();
         let sketch = config.build_sketch();
 
         let mut rng = ChaCha20Rng::seed_from_u64(901);
-        let query = random_vec(16, &mut rng);
-        let results = store.score_all_pages(&query, &sketch, &[0u8]).unwrap();
+        let token = random_vec(16, &mut rng);
+        let results = store.scores(&token, &sketch, &[0u8]).unwrap();
         assert!(results.is_empty());
     }
 
     #[test]
-    fn test_score_all_pages_matches_per_page() {
+    fn test_scores_matches_per_entry() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
@@ -979,29 +984,27 @@ mod tests {
 
         let mut rng = ChaCha20Rng::seed_from_u64(902);
         let outlier_indices = vec![0u8];
-        for slug in 0u64..3 {
+        for eid in 0u64..3 {
             let keys = random_vec(4 * 16, &mut rng);
             let compressed = sketch.quantize(&keys, 4, &outlier_indices).unwrap();
-            store.append(slug, slug, &compressed).unwrap();
+            store.append(eid, eid, &compressed).unwrap();
         }
 
-        let query = random_vec(16, &mut rng);
+        let token = random_vec(16, &mut rng);
 
-        let batch_results = store
-            .score_all_pages(&query, &sketch, &outlier_indices)
-            .unwrap();
+        let batch_results = store.scores(&token, &sketch, &outlier_indices).unwrap();
 
-        // Compare with per-page sketch.score() (same float x sign method)
-        for (slug_hash, batch_scores) in &batch_results {
-            let page = store.get_page(*slug_hash).unwrap();
-            let keys = page.to_compressed_keys(16);
-            let per_page_scores = sketch.score(&query, &keys).unwrap();
-            for (j, (&batch_s, &per_page_s)) in
-                batch_scores.iter().zip(per_page_scores.iter()).enumerate()
+        // Compare with per-entry sketch.score() (same float x sign method)
+        for (entry_id, batch_scores) in &batch_results {
+            let view = store.get_entry(*entry_id).unwrap();
+            let keys = view.to_compressed(16);
+            let per_entry_scores = sketch.score(&token, &keys).unwrap();
+            for (j, (&batch_s, &per_entry_s)) in
+                batch_scores.iter().zip(per_entry_scores.iter()).enumerate()
             {
                 assert!(
-                    (batch_s - per_page_s).abs() < 1e-6,
-                    "slug {slug_hash} vec {j}: batch={batch_s}, per_page={per_page_s}"
+                    (batch_s - per_entry_s).abs() < 1e-6,
+                    "entry {entry_id} vec {j}: batch={batch_s}, per_entry={per_entry_s}"
                 );
             }
         }
@@ -1029,7 +1032,7 @@ mod gpu_tests {
 
     fn test_config() -> KeysConfig {
         KeysConfig {
-            head_dim: 16,
+            dim: 16,
             sketch_dim: 32,
             outlier_sketch_dim: 16,
             seed: 42,
@@ -1038,7 +1041,7 @@ mod gpu_tests {
 
     #[test]
     #[ignore] // requires GPU adapter
-    fn test_score_all_pages_gpu_dispatch() {
+    fn test_scores_gpu_dispatch() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
@@ -1046,29 +1049,27 @@ mod gpu_tests {
 
         let mut rng = ChaCha20Rng::seed_from_u64(950);
         let outlier_indices = vec![0u8];
-        for slug in 0u64..5 {
+        for eid in 0u64..5 {
             let keys = random_vec(4 * 16, &mut rng);
             let compressed = sketch.quantize(&keys, 4, &outlier_indices).unwrap();
-            store.append(slug, slug * 100, &compressed).unwrap();
+            store.append(eid, eid * 100, &compressed).unwrap();
         }
 
-        let query = random_vec(16, &mut rng);
-        let results = store
-            .score_all_pages(&query, &sketch, &outlier_indices)
-            .unwrap();
+        let token = random_vec(16, &mut rng);
+        let results = store.scores(&token, &sketch, &outlier_indices).unwrap();
 
         assert_eq!(results.len(), 5);
-        for (slug_hash, scores) in &results {
+        for (entry_id, scores) in &results {
             assert_eq!(scores.len(), 4);
             for s in scores {
-                assert!(s.is_finite(), "non-finite score for slug {slug_hash}");
+                assert!(s.is_finite(), "non-finite score for entry {entry_id}");
             }
         }
     }
 
     #[test]
     #[ignore] // requires GPU adapter
-    fn test_score_all_pages_gpu_results_valid() {
+    fn test_scores_gpu_results_valid() {
         let dir = tempdir().unwrap();
         let config = test_config();
         let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
@@ -1076,26 +1077,24 @@ mod gpu_tests {
 
         let mut rng = ChaCha20Rng::seed_from_u64(960);
         let outlier_indices = vec![0u8];
-        let num_pages = 10;
-        for slug in 0..num_pages as u64 {
+        let num_entries = 10;
+        for eid in 0..num_entries as u64 {
             let keys = random_vec(4 * 16, &mut rng);
             let compressed = sketch.quantize(&keys, 4, &outlier_indices).unwrap();
-            store.append(slug, slug, &compressed).unwrap();
+            store.append(eid, eid, &compressed).unwrap();
         }
 
-        let query = random_vec(16, &mut rng);
-        let results = store
-            .score_all_pages(&query, &sketch, &outlier_indices)
-            .unwrap();
+        let token = random_vec(16, &mut rng);
+        let results = store.scores(&token, &sketch, &outlier_indices).unwrap();
 
-        // Verify correct page count and all scores finite
-        assert_eq!(results.len(), num_pages);
-        for (slug_hash, scores) in &results {
+        // Verify correct entry count and all scores finite
+        assert_eq!(results.len(), num_entries);
+        for (entry_id, scores) in &results {
             assert_eq!(scores.len(), 4);
             for (j, s) in scores.iter().enumerate() {
                 assert!(
                     s.is_finite(),
-                    "non-finite score for slug {slug_hash} vec {j}"
+                    "non-finite score for entry {entry_id} vec {j}"
                 );
             }
         }

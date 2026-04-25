@@ -49,14 +49,14 @@ fn main() {
         original_bytes as f32 / bytes_per_vector as f32
     );
 
-    // Score a query against compressed keys
-    let query = random_vec(d, &mut rng);
-    let scores = sketch.score(&query, &compressed).unwrap();
+    // Score a token against compressed keys
+    let token = random_vec(d, &mut rng);
+    let scores = sketch.score(&token, &compressed).unwrap();
 
     // Compare with exact dot products
     let exact_scores: Vec<f32> = (0..num_keys)
         .map(|i| {
-            query
+            token
                 .iter()
                 .zip(keys[i * d..(i + 1) * d].iter())
                 .map(|(a, b)| a * b)

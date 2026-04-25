@@ -17,9 +17,9 @@ pub fn hamming_similarity(a: &[u8], b: &[u8], total_bits: usize) -> f32 {
 
 /// Validate that two `CompressedKeys` were produced with compatible sketch parameters.
 fn validate_compressed_pair(a: &CompressedKeys, b: &CompressedKeys) -> Result<()> {
-    if a.head_dim != b.head_dim {
+    if a.dim != b.dim {
         return Err(QjlError::SketchParamMismatch {
-            context: "head_dim differs",
+            context: "dim differs",
         });
     }
     let a_inlier_bytes = a.key_quant.len() / a.num_vectors.max(1);
@@ -77,46 +77,46 @@ fn score_compressed_single(
 }
 
 impl QJLSketch {
-    /// Compute approximate attention scores between a query and compressed keys.
+    /// Compute approximate attention scores between a token and compressed keys.
     ///
     /// Matches the QJL CUDA kernel (`calc_score_kernel`):
-    ///   q_sketch = query @ proj_dir_score  (full sketch)
-    ///   q_outlier_sketch\[i\] = Σ_j query\[outlier_j\] * proj_dir_score\[outlier_j, i\]
+    ///   q_sketch = token @ proj_dir_score  (full sketch)
+    ///   q_outlier_sketch\[i\] = Σ_j token\[outlier_j\] * proj_dir_score\[outlier_j, i\]
     ///   q_inlier_sketch = q_sketch - q_outlier_sketch
     ///   score = sqrt(π/2)/s * ||k_inlier|| * Σ sign(k_inlier_i) * q_inlier_sketch\[i\]
     ///         + sqrt(π/2)/os * ||k_outlier|| * Σ sign(k_outlier_i) * q_outlier_sketch\[i\]
     ///
-    /// - `query`: \[head_dim\] f32
+    /// - `token`: \[dim\] f32
     /// - `compressed`: compressed key vectors from `quantize()`
-    pub fn score(&self, query: &[f32], compressed: &CompressedKeys) -> Result<Vec<f32>> {
-        let d = self.head_dim;
+    pub fn score(&self, token: &[f32], compressed: &CompressedKeys) -> Result<Vec<f32>> {
+        let d = self.dim;
         let s = self.sketch_dim;
         let os = self.outlier_sketch_dim;
-        if query.len() != d {
+        if token.len() != d {
             return Err(QjlError::DimensionMismatch {
                 expected: d,
-                got: query.len(),
+                got: token.len(),
             });
         }
-        validate_finite(query, "score query")?;
+        validate_finite(token, "score token")?;
 
         let inlier_bytes = s / 8;
         let outlier_bytes = os / 8;
 
-        // Full query sketch: q_sketch = proj_dir_quant @ query → [s]
-        let q_sketch = matvec(&self.proj_dir_quant, s, d, query);
+        // Full token sketch: q_sketch = proj_dir_quant @ token → [s]
+        let q_sketch = matvec(&self.proj_dir_quant, s, d, token);
 
-        // Outlier query sketch: only the outlier dimensions of query projected
+        // Outlier token sketch: only the outlier dimensions of token projected
         let mut q_outlier_sketch = vec![0.0f32; s];
         for &idx in &compressed.outlier_indices {
             let j = idx as usize;
             let row_start = j * s;
             for (p, qos) in q_outlier_sketch.iter_mut().enumerate().take(s) {
-                *qos += query[j] * self.proj_dir_score[row_start + p];
+                *qos += token[j] * self.proj_dir_score[row_start + p];
             }
         }
 
-        // Inlier query sketch = full - outlier
+        // Inlier token sketch = full - outlier
         let q_inlier_sketch: Vec<f32> = q_sketch
             .iter()
             .zip(q_outlier_sketch.iter())
@@ -230,7 +230,7 @@ impl QJLSketch {
     }
 }
 
-/// Compute the dot product between float query sketch and packed sign bits.
+/// Compute the dot product between float token sketch and packed sign bits.
 ///
 /// For each projection i: result += sketched_q\[i\] * sign(sketched_k\[i\])
 /// where sign is +1 if bit is set, -1 if not.
@@ -313,7 +313,7 @@ mod tests {
         assert!((hamming_similarity(&a, &a, 13) - 1.0).abs() < 1e-6);
     }
 
-    // --- score (float query vs compressed) tests ---
+    // --- score (float token vs compressed) tests ---
 
     #[test]
     fn test_score_identical_vectors() {

@@ -20,7 +20,7 @@ fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
 
 fn keys_config() -> KeysConfig {
     KeysConfig {
-        head_dim: 16,
+        dim: 16,
         sketch_dim: 32,
         outlier_sketch_dim: 16,
         seed: 42,
@@ -44,7 +44,7 @@ fn test_keys_fresh_values_stale() {
     let sketch = kc.build_sketch();
 
     let mut rng = ChaCha20Rng::seed_from_u64(100);
-    let slug: u64 = 0xAA;
+    let eid: u64 = 0xAA;
     let content_v1: u64 = 0x11;
     let content_v2: u64 = 0x22;
 
@@ -52,37 +52,37 @@ fn test_keys_fresh_values_stale() {
     let keys_v1 = random_vec(4 * 16, &mut rng);
     let compressed_keys_v1 = sketch.quantize(&keys_v1, 4, &[0u8]).unwrap();
     key_store
-        .append(slug, content_v1, &compressed_keys_v1)
+        .append(eid, content_v1, &compressed_keys_v1)
         .unwrap();
 
     let values_v1: Vec<f32> = (0..8).map(|i| i as f32).collect();
     let compressed_values_v1 = quantize_values(&values_v1, 8, 4).unwrap();
     val_store
-        .append(slug, content_v1, &compressed_values_v1)
+        .append(eid, content_v1, &compressed_values_v1)
         .unwrap();
 
     // Both fresh at v1
-    assert!(key_store.is_fresh(slug, content_v1));
-    assert!(val_store.is_fresh(slug, content_v1));
+    assert!(key_store.is_fresh(eid, content_v1));
+    assert!(val_store.is_fresh(eid, content_v1));
 
     // Update keys to v2, leave values at v1
     let keys_v2 = random_vec(4 * 16, &mut rng);
     let compressed_keys_v2 = sketch.quantize(&keys_v2, 4, &[0u8]).unwrap();
     key_store
-        .append(slug, content_v2, &compressed_keys_v2)
+        .append(eid, content_v2, &compressed_keys_v2)
         .unwrap();
 
     // Keys fresh at v2, values stale
-    assert!(key_store.is_fresh(slug, content_v2));
-    assert!(!key_store.is_fresh(slug, content_v1));
-    assert!(!val_store.is_fresh(slug, content_v2));
-    assert!(val_store.is_fresh(slug, content_v1));
+    assert!(key_store.is_fresh(eid, content_v2));
+    assert!(!key_store.is_fresh(eid, content_v1));
+    assert!(!val_store.is_fresh(eid, content_v2));
+    assert!(val_store.is_fresh(eid, content_v1));
 
     // Score still works with updated keys
-    let query = random_vec(16, &mut rng);
-    let page = key_store.get_page(slug).unwrap();
-    let reloaded = page.to_compressed_keys(kc.head_dim as usize);
-    let scores = sketch.score(&query, &reloaded).unwrap();
+    let token = random_vec(16, &mut rng);
+    let view = key_store.get_entry(eid).unwrap();
+    let reloaded = view.to_compressed(kc.dim as usize);
+    let scores = sketch.score(&token, &reloaded).unwrap();
     assert_eq!(scores.len(), 4);
     assert!(scores.iter().all(|s| s.is_finite()));
 }
@@ -98,24 +98,24 @@ fn test_both_stores_independent_lifecycle() {
 
     let mut rng = ChaCha20Rng::seed_from_u64(200);
 
-    // Add 3 pages to keys, only 2 to values
-    for slug in 0u64..3 {
+    // Add 3 entries to keys, only 2 to values
+    for eid in 0u64..3 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        key_store.append(slug, slug * 10, &compressed).unwrap();
+        key_store.append(eid, eid * 10, &compressed).unwrap();
     }
-    for slug in 0u64..2 {
+    for eid in 0u64..2 {
         let values: Vec<f32> = (0..8).map(|i| i as f32).collect();
         let compressed = quantize_values(&values, 8, 4).unwrap();
-        val_store.append(slug, slug * 10, &compressed).unwrap();
+        val_store.append(eid, eid * 10, &compressed).unwrap();
     }
 
     assert_eq!(key_store.len(), 3);
     assert_eq!(val_store.len(), 2);
 
-    // Page 2 has keys but no values — valid state
-    assert!(key_store.get_page(2).is_some());
-    assert!(val_store.get_page(2).is_none());
+    // Entry 2 has keys but no values — valid state
+    assert!(key_store.get_entry(2).is_some());
+    assert!(val_store.get_entry(2).is_none());
 }
 
 #[test]
@@ -150,16 +150,16 @@ fn test_key_store_compact_reclaims_space() {
 
     let mut rng = ChaCha20Rng::seed_from_u64(400);
 
-    // Write 5 pages, then update 3 of them (creates dead space)
-    for slug in 0u64..5 {
+    // Write 5 entries, then update 3 of them (creates dead space)
+    for eid in 0u64..5 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        store.append(slug, slug * 10, &compressed).unwrap();
+        store.append(eid, eid * 10, &compressed).unwrap();
     }
-    for slug in 0u64..3 {
+    for eid in 0u64..3 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        store.append(slug, slug * 100, &compressed).unwrap();
+        store.append(eid, eid * 100, &compressed).unwrap();
     }
 
     assert_eq!(store.len(), 5);
@@ -177,9 +177,9 @@ fn test_key_store_compact_reclaims_space() {
     assert_eq!(store.dead_bytes(), 0);
     assert_eq!(store.len(), 5);
 
-    // All pages still readable
-    for slug in 0u64..5 {
-        assert!(store.get_page(slug).is_some());
+    // All entries still readable
+    for eid in 0u64..5 {
+        assert!(store.get_entry(eid).is_some());
     }
 }
 
@@ -192,23 +192,20 @@ fn test_key_store_compact_preserves_scores() {
 
     let mut rng = ChaCha20Rng::seed_from_u64(500);
     let keys = random_vec(4 * 16, &mut rng);
-    let query = random_vec(16, &mut rng);
+    let token = random_vec(16, &mut rng);
     let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
 
     store.append(0xAA, 0x11, &compressed).unwrap();
     // Update to create dead space
     store.append(0xAA, 0x22, &compressed).unwrap();
 
-    let page_before = store.get_page(0xAA).unwrap();
-    let score_before = sketch.score(
-        &query,
-        &page_before.to_compressed_keys(kc.head_dim as usize),
-    );
+    let view_before = store.get_entry(0xAA).unwrap();
+    let score_before = sketch.score(&token, &view_before.to_compressed(kc.dim as usize));
 
     store.compact().unwrap();
 
-    let page_after = store.get_page(0xAA).unwrap();
-    let score_after = sketch.score(&query, &page_after.to_compressed_keys(kc.head_dim as usize));
+    let view_after = store.get_entry(0xAA).unwrap();
+    let score_after = sketch.score(&token, &view_after.to_compressed(kc.dim as usize));
 
     assert_eq!(score_before.unwrap(), score_after.unwrap());
 }
@@ -219,15 +216,15 @@ fn test_value_store_compact_reclaims_space() {
     let vc = values_config();
     let mut store = ValueStore::create(dir.path(), vc).unwrap();
 
-    for slug in 0u64..5 {
-        let values: Vec<f32> = (0..8).map(|i| (slug as f32) + i as f32).collect();
+    for eid in 0u64..5 {
+        let values: Vec<f32> = (0..8).map(|i| (eid as f32) + i as f32).collect();
         let compressed = quantize_values(&values, 8, 4).unwrap();
-        store.append(slug, slug * 10, &compressed).unwrap();
+        store.append(eid, eid * 10, &compressed).unwrap();
     }
-    for slug in 0u64..3 {
-        let values: Vec<f32> = (0..8).map(|i| (slug as f32) * 2.0 + i as f32).collect();
+    for eid in 0u64..3 {
+        let values: Vec<f32> = (0..8).map(|i| (eid as f32) * 2.0 + i as f32).collect();
         let compressed = quantize_values(&values, 8, 4).unwrap();
-        store.append(slug, slug * 100, &compressed).unwrap();
+        store.append(eid, eid * 100, &compressed).unwrap();
     }
 
     assert!(store.dead_bytes() > 0);
@@ -244,8 +241,8 @@ fn test_value_store_compact_reclaims_space() {
     assert_eq!(store.dead_bytes(), 0);
     assert_eq!(store.len(), 5);
 
-    for slug in 0u64..5 {
-        assert!(store.get_page(slug).is_some());
+    for eid in 0u64..5 {
+        assert!(store.get_entry(eid).is_some());
     }
 }
 
@@ -262,17 +259,11 @@ fn test_value_store_compact_preserves_dot() {
     store.append(0xAA, 0x11, &compressed).unwrap();
     store.append(0xAA, 0x22, &compressed).unwrap();
 
-    let dot_before = quantized_dot(
-        &weights,
-        &store.get_page(0xAA).unwrap().to_compressed_values(),
-    );
+    let dot_before = quantized_dot(&weights, &store.get_entry(0xAA).unwrap().to_compressed());
 
     store.compact().unwrap();
 
-    let dot_after = quantized_dot(
-        &weights,
-        &store.get_page(0xAA).unwrap().to_compressed_values(),
-    );
+    let dot_after = quantized_dot(&weights, &store.get_entry(0xAA).unwrap().to_compressed());
 
     assert_eq!(dot_before.unwrap(), dot_after.unwrap());
 }
@@ -285,12 +276,12 @@ fn test_compact_survives_reopen() {
     let sketch = kc.build_sketch();
 
     let mut rng = ChaCha20Rng::seed_from_u64(600);
-    for slug in 0u64..3 {
+    for eid in 0u64..3 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        store.append(slug, slug, &compressed).unwrap();
+        store.append(eid, eid, &compressed).unwrap();
     }
-    // Update slug 0 to create dead space
+    // Update entry 0 to create dead space
     let keys = random_vec(4 * 16, &mut rng);
     let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
     store.append(0, 99, &compressed).unwrap();
@@ -301,8 +292,8 @@ fn test_compact_survives_reopen() {
     let store2 = KeyStore::open(dir.path()).unwrap();
     assert_eq!(store2.len(), 3);
     assert_eq!(store2.dead_bytes(), 0);
-    for slug in 0u64..3 {
-        assert!(store2.get_page(slug).is_some());
+    for eid in 0u64..3 {
+        assert!(store2.get_entry(eid).is_some());
     }
 }
 
@@ -335,7 +326,7 @@ fn test_truncated_tail_recovery() {
     // Reopen should truncate the garbage
     let store2 = KeyStore::open(dir.path()).unwrap();
     assert_eq!(store2.len(), 1);
-    assert!(store2.get_page(0xAA).is_some());
+    assert!(store2.get_entry(0xAA).is_some());
 
     let recovered_size = std::fs::metadata(dir.path().join("keys.bin"))
         .unwrap()
@@ -352,11 +343,11 @@ fn test_index_ahead_of_store() {
 
     let mut rng = ChaCha20Rng::seed_from_u64(800);
 
-    // Write 2 pages
-    for slug in 0u64..2 {
+    // Write 2 entries
+    for eid in 0u64..2 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        store.append(slug, slug * 10, &compressed).unwrap();
+        store.append(eid, eid * 10, &compressed).unwrap();
     }
     drop(store);
 
@@ -374,11 +365,11 @@ fn test_index_ahead_of_store() {
 
     // Reopen — should drop entries beyond EOF
     let store2 = KeyStore::open(dir.path()).unwrap();
-    // At most 1 page survives (the first one, if it fits in half)
+    // At most 1 entry survives (the first one, if it fits in half)
     assert!(store2.len() <= 1);
     // Should not panic or return corrupt data
     if store2.len() == 1 {
-        assert!(store2.get_page(0).is_some());
+        assert!(store2.get_entry(0).is_some());
     }
 }
 
@@ -408,7 +399,7 @@ fn test_value_store_truncated_tail_recovery() {
 
     let store2 = ValueStore::open(dir.path()).unwrap();
     assert_eq!(store2.len(), 1);
-    assert!(store2.get_page(0xAA).is_some());
+    assert!(store2.get_entry(0xAA).is_some());
 
     let recovered_size = std::fs::metadata(dir.path().join("values.bin"))
         .unwrap()
@@ -422,10 +413,10 @@ fn test_value_store_index_ahead_of_store() {
     let vc = values_config();
     let mut store = ValueStore::create(dir.path(), vc).unwrap();
 
-    for slug in 0u64..2 {
-        let values: Vec<f32> = (0..8).map(|i| (slug as f32) + i as f32).collect();
+    for eid in 0u64..2 {
+        let values: Vec<f32> = (0..8).map(|i| (eid as f32) + i as f32).collect();
         let compressed = quantize_values(&values, 8, 4).unwrap();
-        store.append(slug, slug * 10, &compressed).unwrap();
+        store.append(eid, eid * 10, &compressed).unwrap();
     }
     drop(store);
 
@@ -463,9 +454,9 @@ fn test_nan_input_rejected_in_score() {
     let sketch = kc.build_sketch();
     let keys = vec![1.0f32; 4 * 16];
     let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-    let mut query = vec![1.0f32; 16];
-    query[0] = f32::NAN;
-    let result = sketch.score(&query, &compressed);
+    let mut token = vec![1.0f32; 16];
+    token[0] = f32::NAN;
+    let result = sketch.score(&token, &compressed);
     assert!(result.is_err());
 }
 
@@ -484,8 +475,8 @@ fn test_dimension_mismatch_in_score() {
     let sketch = kc.build_sketch();
     let keys = vec![1.0f32; 4 * 16];
     let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-    let query = vec![1.0f32; 8]; // wrong dim
-    let result = sketch.score(&query, &compressed);
+    let token = vec![1.0f32; 8]; // wrong dim
+    let result = sketch.score(&token, &compressed);
     assert!(result.is_err());
 }
 

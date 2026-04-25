@@ -31,7 +31,7 @@ use qjl_sketch::store::value_store::ValueStore;
 let dir = Path::new("/path/to/store");
 
 let key_store = KeyStore::create(dir, KeysConfig {
-    head_dim: 128,
+    dim: 128,
     sketch_dim: 256,
     outlier_sketch_dim: 64,
     seed: 42,
@@ -63,56 +63,56 @@ On open:
 3. Drop index entries pointing beyond `.bin` length
 4. mmap `.bin`
 
-### Compress and store a page
+### Compress and store an entry
 
 ```rust
 use qjl_sketch::outliers::detect_outliers;
 use qjl_sketch::values::quantize_values;
 
-let slug_hash: u64 = blake3_hash_of_slug;
-let content_hash: u64 = blake3_hash_of_page_content;
+let entry_id: u64 = blake3_hash_of_content;
+let content_hash: u64 = blake3_hash_of_content;
 
 // Keys
-let outlier_indices = detect_outliers(&key_vectors, group_size, head_dim, outlier_count);
+let outlier_indices = detect_outliers(&key_vectors, group_size, dim, outlier_count);
 let compressed_keys = sketch.quantize(&key_vectors, num_vectors, &outlier_indices);
-key_store.append(slug_hash, content_hash, &compressed_keys)?;
+key_store.append(entry_id, content_hash, &compressed_keys)?;
 
 // Values
 let compressed_values = quantize_values(&value_vectors, group_size, bits);
-val_store.append(slug_hash, content_hash, &compressed_values)?;
+val_store.append(entry_id, content_hash, &compressed_values)?;
 ```
 
 Each `append`:
 1. Serializes the entry to bytes
 2. Appends to `.bin` (fsync)
-3. Updates the in-memory index (sorted by slug_hash)
+3. Updates the in-memory index (sorted by entry_id)
 4. Rewrites `.idx` atomically (write .tmp → rename)
 5. Re-mmaps `.bin`
 
-If the slug already exists, the old entry becomes dead space.
+If the entry_id already exists, the old entry becomes dead space.
 
-### Score a query
+### Score a token
 
 ```rust
 // Score-only — no ValueStore needed
-let page = key_store.get_page(slug_hash).unwrap();
-let compressed = page.to_compressed_keys(key_store.config.head_dim as usize);
-let scores = sketch.score(&query_vector, &compressed);
+let entry = key_store.get_entry(entry_id).unwrap();
+let compressed = entry.to_compressed(key_store.config.dim as usize);
+let scores = sketch.score(&token_vector, &compressed);
 ```
 
-`get_page` returns a `KeyPageView` — a zero-copy view into the mmap.
-`to_compressed_keys` copies the data into a `CompressedKeys` struct
+`get_entry` returns a `KeyEntryView` — a zero-copy view into the mmap.
+`to_compressed` copies the data into a `CompressedKeys` struct
 for use with `sketch.score()`.
 
 ### Check staleness
 
 ```rust
-if !key_store.is_fresh(slug_hash, current_content_hash) {
-    // Page content changed — re-compress
+if !key_store.is_fresh(entry_id, current_content_hash) {
+    // Entry content changed — re-compress
 }
 
 // Keys and values can be independently stale
-if key_store.is_fresh(slug_hash, hash) && !val_store.is_fresh(slug_hash, hash) {
+if key_store.is_fresh(entry_id, hash) && !val_store.is_fresh(entry_id, hash) {
     // Keys are current, only re-compress values
 }
 ```
@@ -132,7 +132,7 @@ rename. Readers on the old mmap are unaffected (POSIX fd semantics).
 ### Store metrics
 
 ```rust
-key_store.len()         // number of pages
+key_store.len()         // number of entries
 key_store.live_bytes()  // bytes used by current entries
 key_store.dead_bytes()  // bytes reclaimable by compaction
 key_store.is_empty()
@@ -168,7 +168,7 @@ last valid entry on open. A corrupt `.idx` triggers index rebuild
 
 | Operation | Thread safety |
 |-----------|---------------|
-| `get_page` (read) | Safe — mmap is read-only |
+| `get_entry` (read) | Safe — mmap is read-only |
 | `is_fresh` (read) | Safe — index is in-memory Vec |
 | `append` (write) | Not thread-safe — caller must synchronize |
 | `compact` (write) | Not thread-safe — caller must synchronize |
@@ -183,12 +183,12 @@ See [persistence.md](persistence.md) for the binary format specification.
 ## Store-Level Scoring
 
 ```rust
-// Score a query against all pages (float x sign)
-let results = key_store.score_all_pages(&query, &sketch, &outlier_indices)?;
-// Returns Vec<(slug_hash, Vec<f32>)>
+// Score a token against all entries (float x sign)
+let results = key_store.scores(&token, &sketch, &outlier_indices)?;
+// Returns Vec<(entry_id, Vec<f32>)>
 
 // With `gpu` feature: batches all vectors into single GPU dispatch
-// Without GPU: sketch.score() per page on CPU
+// Without GPU: sketch.score() per entry on CPU
 ```
 
 See [algorithms/11-gpu-scoring.md](algorithms/11-gpu-scoring.md).
@@ -197,7 +197,7 @@ See [algorithms/11-gpu-scoring.md](algorithms/11-gpu-scoring.md).
 
 ```rust
 // Streaming export
-for entry in key_store.iter_pages() {
+for entry in key_store.iter_entries() {
     serde_json::to_writer(&mut file, &entry)?;
 }
 

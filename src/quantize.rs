@@ -18,14 +18,14 @@ pub struct CompressedKeys {
     pub outlier_indices: Vec<u8>,
     /// Number of vectors.
     pub num_vectors: usize,
-    /// Head dimension.
-    pub head_dim: usize,
+    /// Vector dimension.
+    pub dim: usize,
 }
 
 impl QJLSketch {
     /// Quantize a group of key vectors into packed sign bits.
     ///
-    /// - `keys`: flattened [num_vectors, head_dim] row-major
+    /// - `keys`: flattened [num_vectors, dim] row-major
     /// - `num_vectors`: number of vectors
     /// - `outlier_indices`: which dimensions are outliers for this group
     pub fn quantize(
@@ -34,7 +34,7 @@ impl QJLSketch {
         num_vectors: usize,
         outlier_indices: &[u8],
     ) -> Result<CompressedKeys> {
-        let d = self.head_dim;
+        let d = self.dim;
         let s = self.sketch_dim;
         let os = self.outlier_sketch_dim;
         if keys.len() != num_vectors * d {
@@ -46,10 +46,7 @@ impl QJLSketch {
         validate_finite(keys, "quantize keys")?;
         for &idx in outlier_indices {
             if idx as usize >= d {
-                return Err(QjlError::OutlierIndexOutOfRange {
-                    index: idx,
-                    head_dim: d,
-                });
+                return Err(QjlError::OutlierIndexOutOfRange { index: idx, dim: d });
             }
         }
 
@@ -122,7 +119,7 @@ impl QJLSketch {
             outlier_norms,
             outlier_indices: outlier_indices.to_vec(),
             num_vectors,
-            head_dim: d,
+            dim: d,
         })
     }
 }

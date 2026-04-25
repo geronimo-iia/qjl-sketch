@@ -49,9 +49,9 @@ fn main() {
         println!("MSE per dimension: {mse:.6}");
 
         // Score accuracy
-        let query = random_unit_vec(dim, &mut rng);
-        let exact: f32 = query.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
-        let scores = mse_score(&query, &quantized, &rot, &cb).unwrap();
+        let token = random_unit_vec(dim, &mut rng);
+        let exact: f32 = token.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
+        let scores = mse_score(&token, &quantized, &rot, &cb).unwrap();
         let error = (scores[0] - exact).abs();
         println!(
             "Score: approx={:.4}, exact={exact:.4}, error={error:.4}",

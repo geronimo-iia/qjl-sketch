@@ -15,6 +15,12 @@ pub struct KeyQuantizer<'a> {
 }
 
 impl<'a> KeyQuantizer<'a> {
+    /// Create a new quantizer.
+    ///
+    /// - `sketch`: projection matrix shared across all groups
+    /// - `outlier_count`: number of outlier dimensions per group
+    /// - `buffer_size`: number of vectors that trigger a flush; must be a multiple of `group_size`
+    /// - `group_size`: vectors per compression group
     pub fn new(
         sketch: &'a QJLSketch,
         outlier_count: usize,
@@ -38,8 +44,11 @@ impl<'a> KeyQuantizer<'a> {
         })
     }
 
+    /// Compress a batch of key vectors, replacing any previous state.
+    ///
+    /// Vectors that don't fill a complete group are kept as uncompressed residual.
     pub fn build_sketch(&mut self, keys: &[f32], num_vectors: usize) -> Result<()> {
-        let d = self.sketch.head_dim;
+        let d = self.sketch.dim;
         if keys.len() != num_vectors * d {
             return Err(QjlError::DimensionMismatch {
                 expected: num_vectors * d,
@@ -74,8 +83,10 @@ impl<'a> KeyQuantizer<'a> {
         Ok(())
     }
 
+    /// Append one key vector. Flushes the residual buffer into compressed groups
+    /// when it reaches `buffer_size` vectors.
     pub fn update(&mut self, key: &[f32]) -> Result<()> {
-        let d = self.sketch.head_dim;
+        let d = self.sketch.dim;
         if key.len() != d {
             return Err(QjlError::DimensionMismatch {
                 expected: d,
@@ -110,40 +121,48 @@ impl<'a> KeyQuantizer<'a> {
         Ok(())
     }
 
-    pub fn attention_score(&self, query: &[f32]) -> Result<Vec<f32>> {
-        let d = self.sketch.head_dim;
-        if query.len() != d {
+    /// Score a token against all stored vectors.
+    ///
+    /// Compressed groups use approximate float × sign scoring (`sketch.score`).
+    /// Residual vectors (not yet compressed) use exact dot product.
+    /// Returns one score per vector in insertion order.
+    pub fn score_token(&self, token: &[f32]) -> Result<Vec<f32>> {
+        let d = self.sketch.dim;
+        if token.len() != d {
             return Err(QjlError::DimensionMismatch {
                 expected: d,
-                got: query.len(),
+                got: token.len(),
             });
         }
 
         let mut scores = Vec::with_capacity(self.seq_len);
 
         for group in &self.groups {
-            let group_scores = self.sketch.score(query, group)?;
+            let group_scores = self.sketch.score(token, group)?;
             scores.extend_from_slice(&group_scores);
         }
 
         let residual_vecs = self.residual.len() / d;
         for v in 0..residual_vecs {
             let vec_data = &self.residual[v * d..(v + 1) * d];
-            let dot: f32 = query.iter().zip(vec_data.iter()).map(|(a, b)| a * b).sum();
+            let dot: f32 = token.iter().zip(vec_data.iter()).map(|(a, b)| a * b).sum();
             scores.push(dot);
         }
 
         Ok(scores)
     }
 
+    /// Number of vectors currently held in compressed groups.
     pub fn compressed_len(&self) -> usize {
         self.groups.iter().map(|g| g.num_vectors).sum()
     }
 
+    /// Number of vectors currently in the uncompressed residual buffer.
     pub fn residual_len(&self) -> usize {
-        self.residual.len() / self.sketch.head_dim
+        self.residual.len() / self.sketch.dim
     }
 
+    /// Whether the residual buffer is empty.
     pub fn residual_is_empty(&self) -> bool {
         self.residual.is_empty()
     }
@@ -246,17 +265,17 @@ mod tests {
 
         let mut rng = ChaCha20Rng::seed_from_u64(123);
         let keys = random_keys(16, d, &mut rng);
-        let query = random_vec(d, &mut ChaCha20Rng::seed_from_u64(999));
+        let token = random_vec(d, &mut ChaCha20Rng::seed_from_u64(999));
 
         let mut batch_q = KeyQuantizer::new(&sketch, 2, 16, 8).unwrap();
         batch_q.build_sketch(&keys, 16).unwrap();
-        let batch_scores = batch_q.attention_score(&query).unwrap();
+        let batch_scores = batch_q.score_token(&token).unwrap();
 
         let mut stream_q = KeyQuantizer::new(&sketch, 2, 8, 8).unwrap();
         for i in 0..16 {
             stream_q.update(&keys[i * d..(i + 1) * d]).unwrap();
         }
-        let stream_scores = stream_q.attention_score(&query).unwrap();
+        let stream_scores = stream_q.score_token(&token).unwrap();
 
         assert_eq!(batch_scores.len(), stream_scores.len());
         for (b, s) in batch_scores.iter().zip(stream_scores.iter()) {
@@ -269,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn test_attention_score_length() {
+    fn test_score_token_length() {
         let d = 16;
         let s = 64;
         let sketch = QJLSketch::new(d, s, s, 42).unwrap();
@@ -281,8 +300,8 @@ mod tests {
             quantizer.update(&key).unwrap();
         }
 
-        let query = random_vec(d, &mut rng);
-        let scores = quantizer.attention_score(&query).unwrap();
+        let token = random_vec(d, &mut rng);
+        let scores = quantizer.score_token(&token).unwrap();
 
         assert_eq!(scores.len(), 12);
     }

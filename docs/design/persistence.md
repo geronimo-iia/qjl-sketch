@@ -7,7 +7,7 @@ full attention output). Each store has its own data file and index.
 
 ### Key store
 
-One entry per page. Maps to `CompressedKeys` from `src/quantize.rs`.
+One entry per store entry. Maps to `CompressedKeys` from `src/quantize.rs`.
 
 | Field | Type | Size (500 tokens, s=256, os=64) |
 |-------|------|---------------------------------|
@@ -17,11 +17,11 @@ One entry per page. Maps to `CompressedKeys` from `src/quantize.rs`.
 | outlier_norms | [n] f32 | 2 KB |
 | outlier_indices | [outlier_count] u8 | ~7 B |
 
-~24 KB per page at 500 tokens.
+~24 KB per entry at 500 tokens.
 
 ### Value store
 
-One entry per page. Maps to `CompressedValues` from `src/values.rs`.
+One entry per store entry. Maps to `CompressedValues` from `src/values.rs`.
 
 | Field | Type | Size (500 tokens, 4-bit, group=32) |
 |-------|------|------------------------------------|
@@ -29,16 +29,16 @@ One entry per page. Maps to `CompressedValues` from `src/values.rs`.
 | scale | [num_groups] f32 | ~64 B |
 | mn | [num_groups] f32 | ~64 B |
 
-~1.2 KB per page at 500 tokens, 4-bit.
+~1.2 KB per entry at 500 tokens, 4-bit.
 
 ## File Layout
 
 ```
 <store-dir>/
 ├── keys.bin        ← append-only CompressedKeys entries
-├── keys.idx        ← sketch params + slug_hash → (offset, len, gen)
+├── keys.idx        ← sketch params + entry_id → (offset, len, gen)
 ├── values.bin      ← append-only CompressedValues entries
-└── values.idx      ← value params + slug_hash → (offset, len, gen)
+└── values.idx      ← value params + entry_id → (offset, len, gen)
 ```
 
 No `config.bin`. Sketch parameters live in `keys.idx` header. Value
@@ -52,7 +52,7 @@ Header (32 bytes):
 Offset  Size     Field
 0       4        magic: b"TQKI"
 4       2        version: u16 (1)
-6       2        head_dim: u16
+6       2        dim: u16
 8       2        sketch_dim: u16
 10      2        outlier_sketch_dim: u16
 12      8        seed: u64
@@ -61,15 +61,15 @@ Offset  Size     Field
 24      4        live_bytes: u32
 28      4        dead_bytes: u32
 
-Entries (sorted by slug_hash, 32 bytes each):
-0       8        slug_hash: u64
+Entries (sorted by entry_id, 32 bytes each):
+0       8        entry_id: u64
 8       8        offset: u64 (into keys.bin)
 16      4        entry_len: u32
 20      4        generation: u32
 24      8        content_hash: u64
 ```
 
-On open: read header → `QJLSketch::new(head_dim, sketch_dim,
+On open: read header → `QJLSketch::new(dim, sketch_dim,
 outlier_sketch_dim, seed)` → mmap `keys.bin` → ready to score.
 
 ## values.idx
@@ -87,8 +87,8 @@ Offset  Size     Field
 16      4        dead_bytes: u32
 20      4        padding
 
-Entries (sorted by slug_hash, 32 bytes each):
-0       8        slug_hash: u64
+Entries (sorted by entry_id, 32 bytes each):
+0       8        entry_id: u64
 8       8        offset: u64 (into values.bin)
 16      4        entry_len: u32
 20      4        generation: u32
@@ -101,7 +101,7 @@ Entries (sorted by slug_hash, 32 bytes each):
 Offset  Size     Field
 0       4        magic: b"TQKE"
 4       4        entry_len: u32
-8       8        slug_hash: u64
+8       8        entry_id: u64
 16      4        num_vectors: u32
 20      1        outlier_count: u8
 21      3        padding
@@ -121,7 +121,7 @@ index header params.
 Offset  Size     Field
 0       4        magic: b"TQVE"
 4       4        entry_len: u32
-8       8        slug_hash: u64
+8       8        entry_id: u64
 16      4        num_elements: u32
 20      4        num_groups: u32
 24      ...      packed: [num_elements / feat_per_int] i32 LE
@@ -157,7 +157,7 @@ mmap keys.bin. Two syscalls + one small allocation.
 ## Write Path
 
 ```
-compress_page(keys, values, slug, content_hash):
+compress_entry(keys, values, entry_id, content_hash):
   1. Detect outliers, quantize keys → CompressedKeys
   2. Quantize values → CompressedValues
   3. Serialize key entry → append to keys.bin, fsync
@@ -176,10 +176,10 @@ Each index entry stores `content_hash`. Check independently:
 
 ```rust
 impl KeyStore {
-    pub fn is_fresh(&self, slug_hash: u64, content_hash: u64) -> bool { ... }
+    pub fn is_fresh(&self, entry_id: u64, content_hash: u64) -> bool { ... }
 }
 impl ValueStore {
-    pub fn is_fresh(&self, slug_hash: u64, content_hash: u64) -> bool { ... }
+    pub fn is_fresh(&self, entry_id: u64, content_hash: u64) -> bool { ... }
 }
 ```
 
@@ -216,7 +216,7 @@ Per store, independently:
 
 | Operation | Lock | Impact on readers |
 |-----------|------|-------------------|
-| Score query | None | mmap keys.bin read-only |
+| Score token | None | mmap keys.bin read-only |
 | Full attention | None | mmap both read-only |
 | Append keys | Keys mutex | pwrite at EOF |
 | Append values | Values mutex | pwrite at EOF |
@@ -227,8 +227,8 @@ No lock contention between key and value operations.
 
 ## Size Estimates
 
-| Pages | Tokens/page | keys.bin | keys.idx | values.bin | values.idx |
-|-------|-------------|----------|----------|------------|------------|
+| Entries | Tokens/entry | keys.bin | keys.idx | values.bin | values.idx |
+|---------|--------------|----------|----------|------------|------------|
 | 100 | 500 | ~2.4 MB | ~3 KB | ~120 KB | ~3 KB |
 | 1,000 | 500 | ~24 MB | ~32 KB | ~1.2 MB | ~32 KB |
 | 10,000 | 500 | ~240 MB | ~320 KB | ~12 MB | ~320 KB |

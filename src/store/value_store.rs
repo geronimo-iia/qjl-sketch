@@ -19,7 +19,7 @@ pub struct ValueStore {
 }
 
 /// Zero-copy view into a compressed value entry.
-pub struct ValuePageView<'a> {
+pub struct ValueEntryView<'a> {
     data: &'a [u8],
     pub num_elements: u32,
     pub num_groups: u32,
@@ -122,7 +122,7 @@ impl ValueStore {
     /// Append a compressed value entry to the store.
     pub fn append(
         &mut self,
-        slug_hash: u64,
+        entry_id: u64,
         content_hash: u64,
         compressed: &CompressedValues,
     ) -> Result<()> {
@@ -137,7 +137,7 @@ impl ValueStore {
         data_file.write_all(&entry_data)?;
         data_file.sync_all()?;
 
-        if let Ok(pos) = self.index.binary_search_by_key(&slug_hash, |e| e.slug_hash) {
+        if let Ok(pos) = self.index.binary_search_by_key(&entry_id, |e| e.entry_id) {
             self.meta.dead_bytes += self.index[pos].entry_len;
             self.index.remove(pos);
             self.meta.entry_count -= 1;
@@ -146,7 +146,7 @@ impl ValueStore {
         let generation = self.next_generation;
         self.next_generation += 1;
         let new_entry = IndexEntry {
-            slug_hash,
+            entry_id,
             offset,
             entry_len,
             generation,
@@ -154,7 +154,7 @@ impl ValueStore {
         };
         let insert_pos = self
             .index
-            .binary_search_by_key(&slug_hash, |e| e.slug_hash)
+            .binary_search_by_key(&entry_id, |e| e.entry_id)
             .unwrap_err();
         self.index.insert(insert_pos, new_entry);
         self.meta.entry_count += 1;
@@ -169,11 +169,11 @@ impl ValueStore {
         Ok(())
     }
 
-    /// Look up a page by slug hash.
-    pub fn get_page(&self, slug_hash: u64) -> Option<ValuePageView<'_>> {
+    /// Look up an entry by entry_id.
+    pub fn get_entry(&self, entry_id: u64) -> Option<ValueEntryView<'_>> {
         let pos = self
             .index
-            .binary_search_by_key(&slug_hash, |e| e.slug_hash)
+            .binary_search_by_key(&entry_id, |e| e.entry_id)
             .ok()?;
         let entry = &self.index[pos];
         let mmap = self.data_mmap.as_ref()?;
@@ -182,34 +182,38 @@ impl ValueStore {
         if end > mmap.len() {
             return None;
         }
-        ValuePageView::parse(
+        ValueEntryView::parse(
             &mmap[start..end],
             self.config.bits,
             self.config.group_size as usize,
         )
     }
 
-    /// Check if a page's compressed values are fresh.
-    pub fn is_fresh(&self, slug_hash: u64, content_hash: u64) -> bool {
+    /// Check if an entry's compressed values are fresh.
+    pub fn is_fresh(&self, entry_id: u64, content_hash: u64) -> bool {
         self.index
-            .binary_search_by_key(&slug_hash, |e| e.slug_hash)
+            .binary_search_by_key(&entry_id, |e| e.entry_id)
             .ok()
             .map(|i| self.index[i].content_hash == content_hash)
             .unwrap_or(false)
     }
 
+    /// Number of live entries in the store.
     pub fn len(&self) -> usize {
         self.index.len()
     }
 
+    /// Whether the store has no entries.
     pub fn is_empty(&self) -> bool {
         self.index.is_empty()
     }
 
+    /// Bytes occupied by live entries (excludes dead space).
     pub fn live_bytes(&self) -> u32 {
         self.meta.live_bytes
     }
 
+    /// Bytes occupied by overwritten entries, reclaimable via `compact`.
     pub fn dead_bytes(&self) -> u32 {
         self.meta.dead_bytes
     }
@@ -280,31 +284,31 @@ impl ValueStore {
 
 // ── Export / Import ───────────────────────────────────────────────────────────
 
-/// A single value page entry for export/import.
+/// A single value entry for export/import.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ValueExportEntry {
-    pub slug_hash: u64,
+    pub entry_id: u64,
     pub content_hash: u64,
     pub compressed: CompressedValues,
 }
 
 impl ValueStore {
-    /// Iterate over all pages, yielding export entries one at a time.
-    pub fn iter_pages(&self) -> impl Iterator<Item = ValueExportEntry> + '_ {
+    /// Iterate over all entries, yielding export entries one at a time.
+    pub fn iter_entries(&self) -> impl Iterator<Item = ValueExportEntry> + '_ {
         self.index.iter().filter_map(|entry| {
-            let page = self.get_page(entry.slug_hash)?;
+            let view = self.get_entry(entry.entry_id)?;
             Some(ValueExportEntry {
-                slug_hash: entry.slug_hash,
+                entry_id: entry.entry_id,
                 content_hash: entry.content_hash,
-                compressed: page.to_compressed_values(),
+                compressed: view.to_compressed(),
             })
         })
     }
 
     /// Import a single export entry into the store.
     pub fn import_entry(&mut self, entry: &ValueExportEntry) -> Result<()> {
-        self.append(entry.slug_hash, entry.content_hash, &entry.compressed)
+        self.append(entry.entry_id, entry.content_hash, &entry.compressed)
     }
 }
 
@@ -374,9 +378,9 @@ fn serialize_value_entry(compressed: &CompressedValues) -> Vec<u8> {
     buf
 }
 
-// ── ValuePageView ─────────────────────────────────────────────────────────────
+// ── ValueEntryView ─────────────────────────────────────────────────────────────
 
-impl<'a> ValuePageView<'a> {
+impl<'a> ValueEntryView<'a> {
     fn parse(data: &'a [u8], bits: u8, group_size: usize) -> Option<Self> {
         if data.len() < 16 {
             return None;
@@ -419,18 +423,21 @@ impl<'a> ValuePageView<'a> {
         self.scale_offset() + self.scale_len()
     }
 
+    /// Bit-packed quantized values.
     pub fn packed(&self) -> Vec<i32> {
         let start = self.packed_offset();
         let count = self.packed_len() / 4;
         read_i32_slice(&self.data[start..start + count * 4], count)
     }
 
+    /// Per-group scale factors `[num_groups]`.
     pub fn scale(&self) -> Vec<f32> {
         let start = self.scale_offset();
         let count = self.num_groups as usize;
         read_f32_slice(&self.data[start..start + count * 4], count)
     }
 
+    /// Per-group minimum values `[num_groups]`.
     pub fn mn(&self) -> Vec<f32> {
         let start = self.mn_offset();
         let count = self.num_groups as usize;
@@ -438,7 +445,7 @@ impl<'a> ValuePageView<'a> {
     }
 
     /// Reconstruct a `CompressedValues` from the view (copies data).
-    pub fn to_compressed_values(&self) -> CompressedValues {
+    pub fn to_compressed(&self) -> CompressedValues {
         CompressedValues {
             packed: self.packed(),
             scale: self.scale(),
@@ -508,18 +515,18 @@ mod tests {
         store.append(0xAA, 0xBB, &compressed).unwrap();
 
         assert_eq!(store.len(), 1);
-        let page = store.get_page(0xAA).unwrap();
-        assert_eq!(page.num_elements, compressed.num_elements as u32);
-        assert_eq!(page.packed(), compressed.packed);
-        assert_eq!(page.scale(), compressed.scale);
-        assert_eq!(page.mn(), compressed.mn);
+        let view = store.get_entry(0xAA).unwrap();
+        assert_eq!(view.num_elements, compressed.num_elements as u32);
+        assert_eq!(view.packed(), compressed.packed);
+        assert_eq!(view.scale(), compressed.scale);
+        assert_eq!(view.mn(), compressed.mn);
     }
 
     #[test]
-    fn test_page_not_found() {
+    fn test_entry_not_found() {
         let dir = tempdir().unwrap();
         let store = ValueStore::create(dir.path(), test_config()).unwrap();
-        assert!(store.get_page(0xDEAD).is_none());
+        assert!(store.get_entry(0xDEAD).is_none());
     }
 
     #[test]
@@ -537,46 +544,46 @@ mod tests {
         store.append(0x11, 0x22, &compressed).unwrap();
 
         let store2 = ValueStore::open(dir.path()).unwrap();
-        let page = store2.get_page(0x11).unwrap();
-        let reloaded = page.to_compressed_values();
+        let view = store2.get_entry(0x11).unwrap();
+        let reloaded = view.to_compressed();
         let dot_after = quantized_dot(&weights, &reloaded).unwrap();
 
         assert_eq!(dot_before, dot_after);
     }
 
     #[test]
-    fn test_multiple_pages() {
+    fn test_multiple_entries() {
         let dir = tempdir().unwrap();
         let mut store = ValueStore::create(dir.path(), test_config()).unwrap();
 
-        for slug in 0u64..5 {
-            let values: Vec<f32> = (0..8).map(|i| (slug as f32) + i as f32).collect();
+        for eid in 0u64..5 {
+            let values: Vec<f32> = (0..8).map(|i| (eid as f32) + i as f32).collect();
             let compressed = quantize_values(&values, 8, 4).unwrap();
-            store.append(slug, slug * 10, &compressed).unwrap();
+            store.append(eid, eid * 10, &compressed).unwrap();
         }
 
         assert_eq!(store.len(), 5);
-        for slug in 0u64..5 {
-            assert!(store.get_page(slug).is_some());
+        for eid in 0u64..5 {
+            assert!(store.get_entry(eid).is_some());
         }
-        assert!(store.get_page(99).is_none());
+        assert!(store.get_entry(99).is_none());
     }
 
     #[test]
-    fn test_reopen_preserves_all_pages() {
+    fn test_reopen_preserves_all_entries() {
         let dir = tempdir().unwrap();
         let mut store = ValueStore::create(dir.path(), test_config()).unwrap();
 
-        for slug in 0u64..3 {
+        for eid in 0u64..3 {
             let values: Vec<f32> = (0..8).map(|i| i as f32).collect();
             let compressed = quantize_values(&values, 8, 4).unwrap();
-            store.append(slug, slug, &compressed).unwrap();
+            store.append(eid, eid, &compressed).unwrap();
         }
 
         let store2 = ValueStore::open(dir.path()).unwrap();
         assert_eq!(store2.len(), 3);
-        for slug in 0u64..3 {
-            assert!(store2.get_page(slug).is_some());
+        for eid in 0u64..3 {
+            assert!(store2.get_entry(eid).is_some());
         }
     }
 

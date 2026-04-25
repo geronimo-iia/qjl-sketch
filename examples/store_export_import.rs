@@ -23,30 +23,30 @@ fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
 
 fn main() {
     let config = KeysConfig {
-        head_dim: 16,
+        dim: 16,
         sketch_dim: 32,
         outlier_sketch_dim: 16,
         seed: 42,
     };
     let sketch = config.build_sketch();
 
-    // Create source store with 10 pages
+    // Create source store with 10 entries
     let dir_src = tempdir().unwrap();
     let mut store_src = KeyStore::create(dir_src.path(), config.clone()).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(123);
-    for slug in 0u64..10 {
+    for eid in 0u64..10 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        store_src.append(slug, slug * 100, &compressed).unwrap();
+        store_src.append(eid, eid * 100, &compressed).unwrap();
     }
-    println!("Source store: {} pages", store_src.len());
+    println!("Source store: entries: {}", store_src.len());
 
     // Export to JSONL file (streaming — one line per entry)
     let dump_path = dir_src.path().join("keys.jsonl");
     {
         let file = std::fs::File::create(&dump_path).unwrap();
         let mut writer = BufWriter::new(file);
-        for entry in store_src.iter_pages() {
+        for entry in store_src.iter_entries() {
             serde_json::to_writer(&mut writer, &entry).unwrap();
             writer.write_all(b"\n").unwrap();
         }
@@ -66,16 +66,19 @@ fn main() {
             store_dst.import_entry(&entry).unwrap();
         }
     }
-    println!("Imported into destination store: {} pages", store_dst.len());
+    println!(
+        "Imported into destination store: entries: {}",
+        store_dst.len()
+    );
 
     // Verify scores match
-    let query = random_vec(16, &mut rng);
-    for slug in 0u64..10 {
-        let ck_src = store_src.get_page(slug).unwrap().to_compressed_keys(16);
-        let ck_dst = store_dst.get_page(slug).unwrap().to_compressed_keys(16);
-        let s1 = sketch.score(&query, &ck_src).unwrap();
-        let s2 = sketch.score(&query, &ck_dst).unwrap();
-        assert_eq!(s1, s2, "score mismatch for slug {slug}");
+    let token = random_vec(16, &mut rng);
+    for eid in 0u64..10 {
+        let ck_src = store_src.get_entry(eid).unwrap().to_compressed(16);
+        let ck_dst = store_dst.get_entry(eid).unwrap().to_compressed(16);
+        let s1 = sketch.score(&token, &ck_src).unwrap();
+        let s2 = sketch.score(&token, &ck_dst).unwrap();
+        assert_eq!(s1, s2, "score mismatch for entry {eid}");
     }
     println!("✓ All scores match between source and destination stores");
 }

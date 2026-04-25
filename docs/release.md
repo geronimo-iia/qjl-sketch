@@ -25,4 +25,4 @@ The `Release` GitHub Action will:
 Follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 
 - **0.x.y** — pre-1.0, breaking changes bump minor
-- **1.0.0** — stable API: compress, score, persist, query
+- **1.0.0** — stable API: compress, score, persist

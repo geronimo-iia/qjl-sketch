@@ -19,7 +19,7 @@ fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
         .collect()
 }
 
-const VECS_PER_PAGE: usize = 32;
+const VECS_PER_ENTRY: usize = 32;
 
 struct BenchConfig {
     d: usize,
@@ -40,16 +40,16 @@ const CONFIGS: &[BenchConfig] = &[
     },
 ];
 
-const PAGE_COUNTS: &[usize] = &[10, 100, 1_000, 10_000];
+const ENTRY_COUNTS: &[usize] = &[10, 100, 1_000, 10_000];
 
 fn make_store(
     d: usize,
     s: usize,
-    num_pages: usize,
+    num_entries: usize,
     rng: &mut ChaCha20Rng,
 ) -> (KeyStore, KeysConfig, tempfile::TempDir) {
     let config = KeysConfig {
-        head_dim: d as u16,
+        dim: d as u16,
         sketch_dim: s as u16,
         outlier_sketch_dim: s as u16,
         seed: 42,
@@ -59,75 +59,84 @@ fn make_store(
     let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
     let outlier_indices = vec![0u8];
 
-    for slug in 0..num_pages as u64 {
-        let keys = random_vec(VECS_PER_PAGE * d, rng);
+    for eid in 0..num_entries as u64 {
+        let keys = random_vec(VECS_PER_ENTRY * d, rng);
         let compressed = sketch
-            .quantize(&keys, VECS_PER_PAGE, &outlier_indices)
+            .quantize(&keys, VECS_PER_ENTRY, &outlier_indices)
             .unwrap();
-        store.append(slug, slug, &compressed).unwrap();
+        store.append(eid, eid, &compressed).unwrap();
     }
 
     (store, config, dir)
 }
 
-/// CPU baseline: explicit sketch.score() per page (never GPU)
-fn bench_cpu_per_page(c: &mut Criterion) {
+/// CPU baseline: explicit sketch.score() per entry (never GPU)
+fn bench_cpu_per_entry(c: &mut Criterion) {
     let mut rng = ChaCha20Rng::seed_from_u64(100);
 
     for cfg in CONFIGS {
-        let mut group = c.benchmark_group(format!("cpu_per_page_{}", cfg.label));
+        let mut group = c.benchmark_group(format!("cpu_per_entry_{}", cfg.label));
 
-        for &num_pages in PAGE_COUNTS {
-            let (store, config, _dir) = make_store(cfg.d, cfg.s, num_pages, &mut rng);
+        for &num_entries in ENTRY_COUNTS {
+            let (store, config, _dir) = make_store(cfg.d, cfg.s, num_entries, &mut rng);
             let sketch = config.build_sketch();
-            let query = random_vec(cfg.d, &mut rng);
+            let token = random_vec(cfg.d, &mut rng);
 
-            group.bench_with_input(BenchmarkId::new("pages", num_pages), &num_pages, |b, _| {
-                b.iter(|| {
-                    let mut total = 0.0f32;
-                    for slug in 0..num_pages as u64 {
-                        if let Some(page) = store.get_page(slug) {
-                            let keys = page.to_compressed_keys(cfg.d);
-                            let scores = sketch.score(black_box(&query), black_box(&keys)).unwrap();
-                            total += scores.iter().sum::<f32>();
+            group.bench_with_input(
+                BenchmarkId::new("entries", num_entries),
+                &num_entries,
+                |b, _| {
+                    b.iter(|| {
+                        let mut total = 0.0f32;
+                        for eid in 0..num_entries as u64 {
+                            if let Some(view) = store.get_entry(eid) {
+                                let keys = view.to_compressed(cfg.d);
+                                let scores =
+                                    sketch.score(black_box(&token), black_box(&keys)).unwrap();
+                                total += scores.iter().sum::<f32>();
+                            }
                         }
-                    }
-                    black_box(total)
-                });
-            });
+                        black_box(total)
+                    });
+                },
+            );
         }
 
         group.finish();
     }
 }
 
-/// score_all_pages with auto-dispatch (GPU when >= GPU_MIN_BATCH)
-fn bench_score_all_pages(c: &mut Criterion) {
+/// scores with auto-dispatch (GPU when >= GPU_MIN_BATCH)
+fn bench_scores(c: &mut Criterion) {
     let mut rng = ChaCha20Rng::seed_from_u64(200);
 
     for cfg in CONFIGS {
-        let mut group = c.benchmark_group(format!("score_all_pages_{}", cfg.label));
+        let mut group = c.benchmark_group(format!("scores_{}", cfg.label));
 
-        for &num_pages in PAGE_COUNTS {
-            let (store, config, _dir) = make_store(cfg.d, cfg.s, num_pages, &mut rng);
+        for &num_entries in ENTRY_COUNTS {
+            let (store, config, _dir) = make_store(cfg.d, cfg.s, num_entries, &mut rng);
             let sketch = config.build_sketch();
-            let query = random_vec(cfg.d, &mut rng);
+            let token = random_vec(cfg.d, &mut rng);
             let outlier_indices = vec![0u8];
 
-            group.bench_with_input(BenchmarkId::new("pages", num_pages), &num_pages, |b, _| {
-                b.iter(|| {
-                    store.score_all_pages(
-                        black_box(&query),
-                        black_box(&sketch),
-                        black_box(&outlier_indices),
-                    )
-                });
-            });
+            group.bench_with_input(
+                BenchmarkId::new("entries", num_entries),
+                &num_entries,
+                |b, _| {
+                    b.iter(|| {
+                        store.scores(
+                            black_box(&token),
+                            black_box(&sketch),
+                            black_box(&outlier_indices),
+                        )
+                    });
+                },
+            );
         }
 
         group.finish();
     }
 }
 
-criterion_group!(benches, bench_cpu_per_page, bench_score_all_pages);
+criterion_group!(benches, bench_cpu_per_entry, bench_scores);
 criterion_main!(benches);

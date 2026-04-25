@@ -7,7 +7,7 @@ full attention output). Each store has its own data file and index.
 
 ### Key store
 
-One entry per page. Maps to `CompressedKeys` from `src/quantize.rs`.
+One entry per store entry. Maps to `CompressedKeys` from `src/quantize.rs`.
 
 | Field | Type | Size (500 tokens, s=256, os=64) |
 |-------|------|---------------------------------|
@@ -17,11 +17,11 @@ One entry per page. Maps to `CompressedKeys` from `src/quantize.rs`.
 | outlier_norms | [n] f32 | 2 KB |
 | outlier_indices | [outlier_count] u8 | ~7 B |
 
-~24 KB per page at 500 tokens.
+~24 KB per entry at 500 tokens.
 
 ### Value store
 
-One entry per page. Maps to `CompressedValues` from `src/values.rs`.
+One entry per store entry. Maps to `CompressedValues` from `src/values.rs`.
 
 | Field | Type | Size (500 tokens, 4-bit, group=32) |
 |-------|------|------------------------------------|
@@ -29,7 +29,7 @@ One entry per page. Maps to `CompressedValues` from `src/values.rs`.
 | scale | [num_groups] f32 | ~64 B |
 | mn | [num_groups] f32 | ~64 B |
 
-~1.2 KB per page at 500 tokens, 4-bit.
+~1.2 KB per entry at 500 tokens, 4-bit.
 
 ## File Layout
 
@@ -157,7 +157,7 @@ mmap keys.bin. Two syscalls + one small allocation.
 ## Write Path
 
 ```
-compress_page(keys, values, entry_id, content_hash):
+compress_entry(keys, values, entry_id, content_hash):
   1. Detect outliers, quantize keys → CompressedKeys
   2. Quantize values → CompressedValues
   3. Serialize key entry → append to keys.bin, fsync
@@ -227,8 +227,8 @@ No lock contention between key and value operations.
 
 ## Size Estimates
 
-| Pages | Tokens/page | keys.bin | keys.idx | values.bin | values.idx |
-|-------|-------------|----------|----------|------------|------------|
+| Entries | Tokens/entry | keys.bin | keys.idx | values.bin | values.idx |
+|---------|--------------|----------|----------|------------|------------|
 | 100 | 500 | ~2.4 MB | ~3 KB | ~120 KB | ~3 KB |
 | 1,000 | 500 | ~24 MB | ~32 KB | ~1.2 MB | ~32 KB |
 | 10,000 | 500 | ~240 MB | ~320 KB | ~12 MB | ~320 KB |

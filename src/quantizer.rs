@@ -15,6 +15,12 @@ pub struct KeyQuantizer<'a> {
 }
 
 impl<'a> KeyQuantizer<'a> {
+    /// Create a new quantizer.
+    ///
+    /// - `sketch`: projection matrix shared across all groups
+    /// - `outlier_count`: number of outlier dimensions per group
+    /// - `buffer_size`: number of vectors that trigger a flush; must be a multiple of `group_size`
+    /// - `group_size`: vectors per compression group
     pub fn new(
         sketch: &'a QJLSketch,
         outlier_count: usize,
@@ -38,6 +44,9 @@ impl<'a> KeyQuantizer<'a> {
         })
     }
 
+    /// Compress a batch of key vectors, replacing any previous state.
+    ///
+    /// Vectors that don't fill a complete group are kept as uncompressed residual.
     pub fn build_sketch(&mut self, keys: &[f32], num_vectors: usize) -> Result<()> {
         let d = self.sketch.dim;
         if keys.len() != num_vectors * d {
@@ -74,6 +83,8 @@ impl<'a> KeyQuantizer<'a> {
         Ok(())
     }
 
+    /// Append one key vector. Flushes the residual buffer into compressed groups
+    /// when it reaches `buffer_size` vectors.
     pub fn update(&mut self, key: &[f32]) -> Result<()> {
         let d = self.sketch.dim;
         if key.len() != d {
@@ -110,6 +121,11 @@ impl<'a> KeyQuantizer<'a> {
         Ok(())
     }
 
+    /// Score a token against all stored vectors.
+    ///
+    /// Compressed groups use approximate float × sign scoring (`sketch.score`).
+    /// Residual vectors (not yet compressed) use exact dot product.
+    /// Returns one score per vector in insertion order.
     pub fn score_token(&self, token: &[f32]) -> Result<Vec<f32>> {
         let d = self.sketch.dim;
         if token.len() != d {
@@ -136,14 +152,17 @@ impl<'a> KeyQuantizer<'a> {
         Ok(scores)
     }
 
+    /// Number of vectors currently held in compressed groups.
     pub fn compressed_len(&self) -> usize {
         self.groups.iter().map(|g| g.num_vectors).sum()
     }
 
+    /// Number of vectors currently in the uncompressed residual buffer.
     pub fn residual_len(&self) -> usize {
         self.residual.len() / self.sketch.dim
     }
 
+    /// Whether the residual buffer is empty.
     pub fn residual_is_empty(&self) -> bool {
         self.residual.is_empty()
     }

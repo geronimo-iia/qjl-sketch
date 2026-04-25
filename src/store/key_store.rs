@@ -276,10 +276,12 @@ impl KeyStore {
         self.index.is_empty()
     }
 
+    /// Bytes occupied by live entries (excludes dead space).
     pub fn live_bytes(&self) -> u32 {
         self.meta.live_bytes
     }
 
+    /// Bytes occupied by overwritten entries, reclaimable via `compact`.
     pub fn dead_bytes(&self) -> u32 {
         self.meta.dead_bytes
     }
@@ -693,27 +695,32 @@ impl<'a> KeyEntryView<'a> {
         self.key_norms_offset() + self.key_norms_len()
     }
 
+    /// Outlier dimension indices for this entry (`[outlier_count]`).
     pub fn outlier_indices(&self) -> &[u8] {
         let start = self.outlier_indices_offset();
         &self.data[start..start + self.outlier_count as usize]
     }
 
+    /// Packed inlier sign bits `[num_vectors, sketch_dim/8]`.
     pub fn key_quant(&self) -> &[u8] {
         let start = self.key_quant_offset();
         &self.data[start..start + self.key_quant_len()]
     }
 
+    /// Packed outlier sign bits `[num_vectors, outlier_sketch_dim/8]`.
     pub fn key_outlier_quant(&self) -> &[u8] {
         let start = self.key_outlier_quant_offset();
         &self.data[start..start + self.key_outlier_quant_len()]
     }
 
+    /// L2 norm of each full key vector `[num_vectors]`.
     pub fn key_norms(&self) -> Vec<f32> {
         let start = self.key_norms_offset();
         let count = self.num_vectors as usize;
         read_f32_slice(&self.data[start..start + count * 4], count)
     }
 
+    /// L2 norm of each vector's outlier components `[num_vectors]`.
     pub fn outlier_norms(&self) -> Vec<f32> {
         let start = self.outlier_norms_offset();
         let count = self.num_vectors as usize;

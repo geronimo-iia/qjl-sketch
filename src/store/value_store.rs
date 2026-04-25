@@ -198,18 +198,22 @@ impl ValueStore {
             .unwrap_or(false)
     }
 
+    /// Number of live entries in the store.
     pub fn len(&self) -> usize {
         self.index.len()
     }
 
+    /// Whether the store has no entries.
     pub fn is_empty(&self) -> bool {
         self.index.is_empty()
     }
 
+    /// Bytes occupied by live entries (excludes dead space).
     pub fn live_bytes(&self) -> u32 {
         self.meta.live_bytes
     }
 
+    /// Bytes occupied by overwritten entries, reclaimable via `compact`.
     pub fn dead_bytes(&self) -> u32 {
         self.meta.dead_bytes
     }
@@ -419,18 +423,21 @@ impl<'a> ValueEntryView<'a> {
         self.scale_offset() + self.scale_len()
     }
 
+    /// Bit-packed quantized values.
     pub fn packed(&self) -> Vec<i32> {
         let start = self.packed_offset();
         let count = self.packed_len() / 4;
         read_i32_slice(&self.data[start..start + count * 4], count)
     }
 
+    /// Per-group scale factors `[num_groups]`.
     pub fn scale(&self) -> Vec<f32> {
         let start = self.scale_offset();
         let count = self.num_groups as usize;
         read_f32_slice(&self.data[start..start + count * 4], count)
     }
 
+    /// Per-group minimum values `[num_groups]`.
     pub fn mn(&self) -> Vec<f32> {
         let start = self.mn_offset();
         let count = self.num_groups as usize;

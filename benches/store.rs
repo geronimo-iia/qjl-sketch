@@ -63,7 +63,7 @@ fn bench_append(c: &mut Criterion) {
     let compressed = sketch.quantize(&keys, 32, &outlier_indices).unwrap();
 
     let mut eid = 0u64;
-    c.bench_function("append_single_page", |b| {
+    c.bench_function("append_single_entry", |b| {
         b.iter(|| {
             store.append(eid, eid * 10, black_box(&compressed)).unwrap();
             eid += 1;

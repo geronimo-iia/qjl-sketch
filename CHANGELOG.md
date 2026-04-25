@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-04-26
+
+### Changed (Breaking)
+
+- Renamed public API identifiers to use domain-correct terminology:
+  - `head_dim` → `dim` (structs, method parameters, error messages)
+  - `query` → `token` (all scoring function parameters and local variables)
+  - `slug` / `slug_hash` → `entry_id` / `content_hash` (store API and index structures)
+- Replaced `page` / `pages` domain term (from llm-wiki origin) with `entry` / `entries`
+  throughout source code, tests, benchmarks, bench script, and all documentation
+
+### Fixed
+
+- `benches/store.rs`: benchmark name `"append_single_page"` → `"append_single_entry"`
+- `scripts/bench.sh`: corrected mismatched benchmark paths
+  (`cold_start_100_entrys` → `cold_start_100_entries`,
+  `get_entry_from_100` → `get_entry_from_100_entries`)
+
+### Documentation
+
+- Rewrote `docs/api-overview.md` from source — complete method signatures, all
+  public fields, error variant table, feature flag behaviour
+- Added `ValueEntryView` row (was missing from the Store table)
+- Updated all `docs/design/` files: `store.md`, `persistence.md`, `testing.md`,
+  `algorithms/08-compressed-scoring.md`, `algorithms/11-gpu-scoring.md`
+- Updated `docs/decisions/001-gpu-scoring-architecture.md`
+- Bumped test count heading in `docs/design/testing.md` from v0.5.0 to v0.6.0
+- Added crate-level `//!` documentation to `src/lib.rs`
+- Added doc comments on all previously undocumented public items:
+  - `KeysConfig`, `ValuesConfig`, `IndexEntry`, `IndexMeta` — structs, fields,
+    and all `write_to` / `read_from` / `build_sketch` methods
+  - `KeyQuantizer` — `new`, `build_sketch`, `update`, `score_token`,
+    `compressed_len`, `residual_len`, `residual_is_empty`
+  - `KeyStore` — `live_bytes`, `dead_bytes`
+  - `KeyEntryView` — `outlier_indices`, `key_quant`, `key_outlier_quant`,
+    `key_norms`, `outlier_norms`
+  - `ValueStore` — `len`, `is_empty`, `live_bytes`, `dead_bytes`
+  - `ValueEntryView` — `packed`, `scale`, `mn`
+- Fixed stale `"Head dimension"` → `"Vector dimension"` in `CompressedKeys::dim`
+
 ## [0.5.0] — TBD
 
 ### Added
@@ -14,8 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gpu` feature flag — WGPU-based GPU acceleration for store-level scoring
   - Float×sign compute shader (`score_float_sign.wgsl`)
   - `GpuContext` — lazy singleton with runtime adapter detection
-  - `KeyStore::scores` batches all vectors across all pages
-    into a single GPU dispatch; falls back to CPU compressed path
+  - `KeyStore::scores` batches all vectors across all entries
+    into a single GPU dispatch; falls back to CPU path
     when GPU unavailable or below threshold
   - Individual `score()` and `score_compressed()` always use CPU
   - `QJL_GPU_MIN_BATCH` env var for `scores` GPU threshold (default 5000)
@@ -69,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `QJLSketch::score_compressed` — batch compressed-vs-compressed scoring
   via Hamming-based cosine estimation with outlier separation
 - `QJLSketch::score_compressed_pair` — single-pair variant for
-  cross-index comparison (e.g. page-to-page similarity)
+  cross-index comparison (e.g. entry-to-entry similarity)
 - `QjlError::InvalidCodebookBitWidth`, `InvalidDimension`,
   `SketchParamMismatch`, and `IndexOutOfBounds` error variants
 - `THIRD_PARTY_NOTICES` file (TurboQuant MIT attribution)
@@ -155,7 +195,7 @@ First release. CPU-only QJL compression, scoring, and persistence.
 
 ### Benchmarks
 
-- Score: 18 µs/page (32 vectors, d=128, s=256)
+- Score: 18 µs/entry (32 vectors, d=128, s=256)
 - Key quantize: 38 µs/vector
-- Cold start: 221 µs for 100 pages
-- Page lookup: 5 ns (binary search + mmap slice)
+- Cold start: 221 µs for 100 entries
+- Entry lookup: 5 ns (binary search + mmap slice)

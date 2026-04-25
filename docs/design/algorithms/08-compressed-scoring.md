@@ -42,4 +42,4 @@ The cosine estimator comes from sign-random-projection theory:
 P(sign match) = 1 - θ/π, so θ = π·(1 - fraction_matching).
 
 `score_compressed_pair(a, i, b, j)` extracts single vectors from
-different-sized sets for cross-comparison (e.g. page-to-page similarity).
+different-sized sets for cross-comparison (e.g. entry-to-entry similarity).

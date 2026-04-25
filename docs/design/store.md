@@ -63,14 +63,14 @@ On open:
 3. Drop index entries pointing beyond `.bin` length
 4. mmap `.bin`
 
-### Compress and store a page
+### Compress and store an entry
 
 ```rust
 use qjl_sketch::outliers::detect_outliers;
 use qjl_sketch::values::quantize_values;
 
 let entry_id: u64 = blake3_hash_of_content;
-let content_hash: u64 = blake3_hash_of_page_content;
+let content_hash: u64 = blake3_hash_of_content;
 
 // Keys
 let outlier_indices = detect_outliers(&key_vectors, group_size, dim, outlier_count);
@@ -95,8 +95,8 @@ If the entry_id already exists, the old entry becomes dead space.
 
 ```rust
 // Score-only — no ValueStore needed
-let page = key_store.get_entry(entry_id).unwrap();
-let compressed = page.to_compressed(key_store.config.dim as usize);
+let entry = key_store.get_entry(entry_id).unwrap();
+let compressed = entry.to_compressed(key_store.config.dim as usize);
 let scores = sketch.score(&token_vector, &compressed);
 ```
 
@@ -108,7 +108,7 @@ for use with `sketch.score()`.
 
 ```rust
 if !key_store.is_fresh(entry_id, current_content_hash) {
-    // Page content changed — re-compress
+    // Entry content changed — re-compress
 }
 
 // Keys and values can be independently stale
@@ -132,7 +132,7 @@ rename. Readers on the old mmap are unaffected (POSIX fd semantics).
 ### Store metrics
 
 ```rust
-key_store.len()         // number of pages
+key_store.len()         // number of entries
 key_store.live_bytes()  // bytes used by current entries
 key_store.dead_bytes()  // bytes reclaimable by compaction
 key_store.is_empty()
@@ -183,12 +183,12 @@ See [persistence.md](persistence.md) for the binary format specification.
 ## Store-Level Scoring
 
 ```rust
-// Score a token against all pages (float x sign)
+// Score a token against all entries (float x sign)
 let results = key_store.scores(&token, &sketch, &outlier_indices)?;
 // Returns Vec<(entry_id, Vec<f32>)>
 
 // With `gpu` feature: batches all vectors into single GPU dispatch
-// Without GPU: sketch.score() per page on CPU
+// Without GPU: sketch.score() per entry on CPU
 ```
 
 See [algorithms/11-gpu-scoring.md](algorithms/11-gpu-scoring.md).

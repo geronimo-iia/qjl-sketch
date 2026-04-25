@@ -18,7 +18,7 @@ pub struct CompressedKeys {
     pub outlier_indices: Vec<u8>,
     /// Number of vectors.
     pub num_vectors: usize,
-    /// Head dimension.
+    /// Vector dimension.
     pub dim: usize,
 }
 

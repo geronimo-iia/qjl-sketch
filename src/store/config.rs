@@ -9,16 +9,22 @@ pub const VALUE_ENTRY_MAGIC: &[u8; 4] = b"TQVE";
 
 pub const INDEX_VERSION: u16 = 1;
 
+/// Configuration for a `KeyStore` — stored in the `keys.idx` header.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeysConfig {
+    /// Key vector dimension.
     pub dim: u16,
+    /// Number of sign projections (must be divisible by 8).
     pub sketch_dim: u16,
+    /// Sign projections for outlier components (must be divisible by 8).
     pub outlier_sketch_dim: u16,
+    /// RNG seed for deterministic `QJLSketch` reconstruction.
     pub seed: u64,
 }
 
 impl KeysConfig {
+    /// Serialize to the `keys.idx` binary format.
     pub fn write_to(&self, w: &mut impl Write) -> Result<()> {
         w.write_all(KEYS_INDEX_MAGIC)?;
         w.write_all(&INDEX_VERSION.to_le_bytes())?;
@@ -29,6 +35,7 @@ impl KeysConfig {
         Ok(())
     }
 
+    /// Deserialize from the `keys.idx` binary format.
     pub fn read_from(r: &mut impl Read) -> Result<Self> {
         let mut magic = [0u8; 4];
         r.read_exact(&mut magic)?;
@@ -50,6 +57,7 @@ impl KeysConfig {
         })
     }
 
+    /// Reconstruct the `QJLSketch` from stored parameters (deterministic).
     pub fn build_sketch(&self) -> QJLSketch {
         QJLSketch::new(
             self.dim as usize,
@@ -61,14 +69,18 @@ impl KeysConfig {
     }
 }
 
+/// Configuration for a `ValueStore` — stored in the `values.idx` header.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ValuesConfig {
+    /// Quantization bit-width (2 or 4).
     pub bits: u8,
+    /// Number of elements per quantization group.
     pub group_size: u16,
 }
 
 impl ValuesConfig {
+    /// Serialize to the `values.idx` binary format.
     pub fn write_to(&self, w: &mut impl Write) -> Result<()> {
         w.write_all(VALUES_INDEX_MAGIC)?;
         w.write_all(&INDEX_VERSION.to_le_bytes())?;
@@ -77,6 +89,7 @@ impl ValuesConfig {
         Ok(())
     }
 
+    /// Deserialize from the `values.idx` binary format.
     pub fn read_from(r: &mut impl Read) -> Result<Self> {
         let mut magic = [0u8; 4];
         r.read_exact(&mut magic)?;
@@ -97,19 +110,27 @@ impl ValuesConfig {
     }
 }
 
+/// One record in the `.idx` file — maps an `entry_id` to its location in `.bin`.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexEntry {
+    /// Unique identifier for this store entry.
     pub entry_id: u64,
+    /// Byte offset of the entry in the `.bin` file.
     pub offset: u64,
+    /// Byte length of the entry in the `.bin` file.
     pub entry_len: u32,
+    /// Monotonic write counter used during crash recovery.
     pub generation: u32,
+    /// Hash of the source content; used for staleness checks.
     pub content_hash: u64,
 }
 
 impl IndexEntry {
+    /// On-disk size of one index entry in bytes.
     pub const SIZE: usize = 32;
 
+    /// Serialize to the `.idx` binary format.
     pub fn write_to(&self, w: &mut impl Write) -> Result<()> {
         w.write_all(&self.entry_id.to_le_bytes())?;
         w.write_all(&self.offset.to_le_bytes())?;
@@ -119,6 +140,7 @@ impl IndexEntry {
         Ok(())
     }
 
+    /// Deserialize from the `.idx` binary format.
     pub fn read_from(r: &mut impl Read) -> Result<Self> {
         Ok(Self {
             entry_id: read_u64(r)?,
@@ -130,15 +152,20 @@ impl IndexEntry {
     }
 }
 
+/// Store-level counters written in the `.idx` header after the config block.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexMeta {
+    /// Number of live entries in the store.
     pub entry_count: u16,
+    /// Total bytes used by live entries in `.bin`.
     pub live_bytes: u32,
+    /// Total bytes from overwritten entries, reclaimable via compaction.
     pub dead_bytes: u32,
 }
 
 impl IndexMeta {
+    /// Serialize to the `.idx` binary format.
     pub fn write_to(&self, w: &mut impl Write) -> Result<()> {
         w.write_all(&self.entry_count.to_le_bytes())?;
         w.write_all(&[0u8; 2])?;
@@ -147,6 +174,7 @@ impl IndexMeta {
         Ok(())
     }
 
+    /// Deserialize from the `.idx` binary format.
     pub fn read_from(r: &mut impl Read) -> Result<Self> {
         let entry_count = read_u16(r)?;
         let _padding = read_u16(r)?;

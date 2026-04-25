@@ -5,7 +5,7 @@
 ```
 +---------------------------------------------------+
 |  Layer 4: End-to-end (pipeline)                   |  llm-wiki
-|  "search token -> ranked pages with scores"       |
+|  "search token -> ranked entries with scores"     |
 +---------------------------------------------------+
 |  Layer 3: Persistence + Integration               |  tests/
 |  "compress -> write -> reload -> score = same"    |
@@ -18,7 +18,7 @@
 +---------------------------------------------------+
 ```
 
-## Test counts (v0.5.0)
+## Test counts (v0.6.0)
 
 | Category | Count | Feature |
 |----------|-------|---------|

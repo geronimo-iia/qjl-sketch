@@ -29,7 +29,7 @@ Architecture Decision Records (ADRs).
 
 | ADR                                              | Decision                                                 |
 | ------------------------------------------------ | -------------------------------------------------------- |
-| [001](decisions/001-gpu-scoring-architecture.md) | GPU only in `score_all_pages` batch path, never per-page |
+| [001](decisions/001-gpu-scoring-architecture.md) | GPU only in `scores` batch path, never per-page |
 
 ## Guides
 

@@ -14,11 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gpu` feature flag — WGPU-based GPU acceleration for store-level scoring
   - Float×sign compute shader (`score_float_sign.wgsl`)
   - `GpuContext` — lazy singleton with runtime adapter detection
-  - `KeyStore::score_all_pages` batches all vectors across all pages
+  - `KeyStore::scores` batches all vectors across all pages
     into a single GPU dispatch; falls back to CPU compressed path
     when GPU unavailable or below threshold
   - Individual `score()` and `score_compressed()` always use CPU
-  - `QJL_GPU_MIN_BATCH` env var for `score_all_pages` GPU threshold (default 5000)
+  - `QJL_GPU_MIN_BATCH` env var for `scores` GPU threshold (default 5000)
   - 5 GPU tests (`#[ignore]` — require GPU adapter)
   - `benches/gpu_score.rs` — CPU baseline vs GPU benchmarks
   - `scripts/bench.sh` — benchmark runner with report collection
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mse_quant` module — MSE-optimal vector quantization (TurboQuant Stage 1)
   - `mse_quantize` — rotate + Lloyd-Max per-coordinate quantization
   - `mse_dequantize` — centroid lookup + inverse rotation
-  - `mse_score` — score query against quantized vectors (rotate query
+  - `mse_score` — score token against quantized vectors (rotate token
     once, dot with dequantized rotated coordinates)
   - `MseQuantized` struct
 - `serde` feature flag — optional `Serialize`/`Deserialize` on public structs
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Params-only custom serde on `QJLSketch` and `RandomRotation`
     (serialize seed + dims, reconstruct matrices on deserialize)
   - `KeyExportEntry` / `ValueExportEntry` for store export/import
-  - `KeyStore::iter_pages()` / `ValueStore::iter_pages()` — streaming export
+  - `KeyStore::iter_entries()` / `ValueStore::iter_entries()` — streaming export
   - `KeyStore::import_entry()` / `ValueStore::import_entry()` — streaming import
 - `seed` field on `QJLSketch` and `RandomRotation` (stored for serialization)
 - 14 new tests (7 rotation + 6 mse_quant + 1 quality)
@@ -111,7 +111,7 @@ instead of panicking on invalid input.
 - `detect_outliers` returns `Result<Vec<u8>>`
 - `quantize_values` returns `Result<CompressedValues>`
 - `quantized_dot` returns `Result<f32>`
-- `KeyQuantizer::new`, `build_sketch`, `update`, `attention_score` return `Result`
+- `KeyQuantizer::new`, `build_sketch`, `update`, `score_token` return `Result`
 - `KeyStore` and `ValueStore` methods return `qjl_sketch::error::Result`
 - Store config `read_from` returns `QjlError::StoreMagicMismatch` /
   `StoreVersionMismatch` instead of `io::Error`
@@ -139,7 +139,7 @@ First release. CPU-only QJL compression, scoring, and persistence.
 - Two independent stores per directory (keys.bin/idx + values.bin/idx)
 - Sketch params in index header — no config.bin, matrix recomputed
   from seed
-- Zero-copy `KeyPageView` / `ValuePageView` into mmap'd data
+- Zero-copy `KeyEntryView` / `ValueEntryView` into mmap'd data
 - Content-hash staleness detection (blake3)
 - Compaction with atomic rename
 - Crash recovery: truncated tail detection, index-ahead-of-store
@@ -148,7 +148,7 @@ First release. CPU-only QJL compression, scoring, and persistence.
 ### Quality
 
 - 75 tests (54 unit + 12 persistence integration + 9 quality)
-- Distortion < 0.35 at sketch_dim = 2 × head_dim
+- Distortion < 0.35 at sketch_dim = 2 × dim
 - Ranking preservation: Kendall's tau > 0.70, top-10 recall ≥ 0.55
 - Outlier separation reduces distortion ≥ 20% on spiky vectors
 - Score survives persistence round-trip (bit-exact)

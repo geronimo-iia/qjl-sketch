@@ -88,21 +88,21 @@ pub fn mse_dequantize(
     Ok(out)
 }
 
-/// Score a query against MSE-quantized vectors.
+/// Score a token against MSE-quantized vectors.
 ///
-/// Rotates the query once, then dots with dequantized rotated
+/// Rotates the token once, then dots with dequantized rotated
 /// coordinates directly: dot(Π·q, ỹ) = dot(q, Πᵀ·ỹ) by orthogonality.
 pub fn mse_score(
-    query: &[f32],
+    token: &[f32],
     quantized: &MseQuantized,
     rotation: &RandomRotation,
     codebook: &Codebook,
 ) -> Result<Vec<f32>> {
     let dim = rotation.dim;
-    if query.len() != dim {
+    if token.len() != dim {
         return Err(QjlError::DimensionMismatch {
             expected: dim,
-            got: query.len(),
+            got: token.len(),
         });
     }
     if quantized.dim != dim {
@@ -111,9 +111,9 @@ pub fn mse_score(
             got: quantized.dim,
         });
     }
-    validate_finite(query, "mse_score query")?;
+    validate_finite(token, "mse_score token")?;
 
-    let q_rot = rotation.rotate(query)?;
+    let q_rot = rotation.rotate(token)?;
 
     let scores = (0..quantized.num_vectors)
         .map(|v| {
@@ -262,13 +262,13 @@ mod tests {
 
         let num = 5;
         let vecs: Vec<f32> = (0..num).flat_map(|_| random_vec(dim, &mut rng)).collect();
-        let query = random_vec(dim, &mut rng);
+        let token = random_vec(dim, &mut rng);
 
         let q = mse_quantize(&vecs, num, &rot, &cb).unwrap();
         assert_eq!(q.indices.len(), num * dim);
         assert_eq!(q.num_vectors, num);
 
-        let scores = mse_score(&query, &q, &rot, &cb).unwrap();
+        let scores = mse_score(&token, &q, &rot, &cb).unwrap();
         assert_eq!(scores.len(), num);
         for s in &scores {
             assert!(s.is_finite());

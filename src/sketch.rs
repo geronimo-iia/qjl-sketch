@@ -11,15 +11,15 @@ use crate::error::{QjlError, Result};
 /// sign-based vector compression. The projection preserves inner
 /// product structure (Johnson-Lindenstrauss).
 pub struct QJLSketch {
-    pub head_dim: usize,
+    pub dim: usize,
     pub sketch_dim: usize,
     pub outlier_sketch_dim: usize,
     /// RNG seed used to generate the projection (stored for serialization).
     pub seed: u64,
-    /// Orthogonalized projection matrix [head_dim, sketch_dim], row-major.
-    /// Used to sketch queries: sketched_q = query @ proj_dir_score.
+    /// Orthogonalized projection matrix [dim, sketch_dim], row-major.
+    /// Used to sketch tokens: sketched_q = token @ proj_dir_score.
     pub proj_dir_score: Vec<f32>,
-    /// Transposed projection [sketch_dim, head_dim], row-major.
+    /// Transposed projection [sketch_dim, dim], row-major.
     /// Used to sketch keys: sketched_k = proj_dir_quant @ key.
     pub proj_dir_quant: Vec<f32>,
 }
@@ -27,17 +27,17 @@ pub struct QJLSketch {
 impl QJLSketch {
     /// Create a new sketch with the given dimensions and RNG seed.
     ///
-    /// - `head_dim`: dimension of each vector (d)
+    /// - `dim`: dimension of each vector (d)
     /// - `sketch_dim`: number of random projections (s), must be divisible by 8
     /// - `outlier_sketch_dim`: sketch dimension for outlier components, must be divisible by 8
     /// - `seed`: RNG seed for reproducibility
     pub fn new(
-        head_dim: usize,
+        dim: usize,
         sketch_dim: usize,
         outlier_sketch_dim: usize,
         seed: u64,
     ) -> Result<Self> {
-        if head_dim == 0 {
+        if dim == 0 {
             return Err(QjlError::DimensionMismatch {
                 expected: 1,
                 got: 0,
@@ -54,13 +54,13 @@ impl QJLSketch {
         }
 
         let mut rng = ChaCha20Rng::seed_from_u64(seed);
-        let proj_dir_score = init_orthogonal_projection(head_dim, sketch_dim, &mut rng);
+        let proj_dir_score = init_orthogonal_projection(dim, sketch_dim, &mut rng);
 
-        // proj_dir_quant is the transpose: [sketch_dim, head_dim]
-        let proj_dir_quant = transpose(&proj_dir_score, head_dim, sketch_dim);
+        // proj_dir_quant is the transpose: [sketch_dim, dim]
+        let proj_dir_quant = transpose(&proj_dir_score, dim, sketch_dim);
 
         Ok(Self {
-            head_dim,
+            dim,
             sketch_dim,
             outlier_sketch_dim,
             seed,
@@ -70,13 +70,13 @@ impl QJLSketch {
     }
 }
 
-/// Generate an orthogonalized random projection matrix [head_dim, sketch_dim].
+/// Generate an orthogonalized random projection matrix [dim, sketch_dim].
 ///
 /// Algorithm:
-/// 1. Sample Gaussian random matrix [head_dim, sketch_dim]
-/// 2. Split into chunks of [head_dim, head_dim] (or smaller for the last chunk)
+/// 1. Sample Gaussian random matrix [dim, sketch_dim]
+/// 2. Split into chunks of [dim, dim] (or smaller for the last chunk)
 /// 3. QR-decompose each chunk
-/// 4. Replace chunk with Q * sqrt(head_dim)
+/// 4. Replace chunk with Q * sqrt(dim)
 fn init_orthogonal_projection(d: usize, s: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
     // Sample random Gaussian matrix [d, s] stored as column-major for nalgebra
     let normal = StandardNormal;
@@ -155,7 +155,7 @@ mod serde_impl {
 
     #[derive(Serialize, Deserialize)]
     struct QJLSketchParams {
-        head_dim: usize,
+        dim: usize,
         sketch_dim: usize,
         outlier_sketch_dim: usize,
         seed: u64,
@@ -164,7 +164,7 @@ mod serde_impl {
     impl Serialize for QJLSketch {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             QJLSketchParams {
-                head_dim: self.head_dim,
+                dim: self.dim,
                 sketch_dim: self.sketch_dim,
                 outlier_sketch_dim: self.outlier_sketch_dim,
                 seed: self.seed,
@@ -176,7 +176,7 @@ mod serde_impl {
     impl<'de> Deserialize<'de> for QJLSketch {
         fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let p = QJLSketchParams::deserialize(deserializer)?;
-            QJLSketch::new(p.head_dim, p.sketch_dim, p.outlier_sketch_dim, p.seed)
+            QJLSketch::new(p.dim, p.sketch_dim, p.outlier_sketch_dim, p.seed)
                 .map_err(serde::de::Error::custom)
         }
     }
@@ -191,7 +191,7 @@ mod tests {
         let sketch = QJLSketch::new(128, 256, 64, 42).unwrap();
         assert_eq!(sketch.proj_dir_score.len(), 128 * 256);
         assert_eq!(sketch.proj_dir_quant.len(), 256 * 128);
-        assert_eq!(sketch.head_dim, 128);
+        assert_eq!(sketch.dim, 128);
         assert_eq!(sketch.sketch_dim, 256);
         assert_eq!(sketch.outlier_sketch_dim, 64);
     }
@@ -243,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new_zero_head_dim() {
+    fn test_new_zero_dim() {
         assert!(QJLSketch::new(0, 128, 32, 42).is_err());
     }
 

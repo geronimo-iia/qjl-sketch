@@ -47,7 +47,7 @@ Sketch creation is one-time cost on open.
 
 ## GPU Store Scoring (`--features gpu`)
 
-`score_all_pages` uses float x sign scoring. With GPU, all vectors
+`scores` uses float x sign scoring. With GPU, all vectors
 across all pages are batched into a single WGPU compute dispatch.
 Without GPU, falls back to `sketch.score()` per page.
 

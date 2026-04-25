@@ -47,7 +47,7 @@ for the design and layering plan.
 
 ### GPU — further optimization
 
-- [ ] GPU-accelerated query projection (matrix-vector multiply)
+- [ ] GPU-accelerated token projection (matrix-vector multiply)
 - [ ] Buffer reuse / pre-allocation across queries
 - [ ] Benchmark-calibrated `GPU_MIN_BATCH` per platform
 

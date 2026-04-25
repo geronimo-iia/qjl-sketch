@@ -17,7 +17,7 @@ update(key):
   Append to residual. If residual reaches buffer_size:
     Split into groups, compress, append to groups, clear residual.
 
-attention_score(query):
+score_token(token):
   For compressed groups: use Algorithm 3 (approximate scores).
   For residual vectors: exact dot product (not yet compressed).
   Concatenate and return.

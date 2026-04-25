@@ -31,7 +31,7 @@ fn measure_distortion(d: usize, s: usize, trials: usize, seed: u64) -> f64 {
 #[test]
 fn test_distortion_rate() {
     let d = 128;
-    let s = 2 * d; // sketch_dim = 2 * head_dim
+    let s = 2 * d; // sketch_dim = 2 * dim
     let distortion = measure_distortion(d, s, 10_000, 300);
 
     assert!(

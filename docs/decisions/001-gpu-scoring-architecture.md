@@ -7,7 +7,7 @@ Status: Accepted
 
 We added WGPU GPU acceleration for vector scoring. Initial
 implementation dispatched to GPU from `score()` and `score_compressed()`
-per-call, and from `score_all_pages()` per-page. Benchmarks on
+per-call, and from `scores()` per-page. Benchmarks on
 Apple M3 Max revealed this approach was counterproductive.
 
 ## Benchmark Data (Apple M3 Max)
@@ -50,7 +50,7 @@ Single-dispatch batch should be **~3x faster** than CPU for 1000+ pages.
 
 ## Decision
 
-### GPU only in `score_all_pages` batch path
+### GPU only in `scores` batch path
 
 1. **`score()` — always CPU.** Per-page calls (32 vectors) can never
    amortize 2.1 ms GPU overhead. Removed GPU dispatch.
@@ -60,7 +60,7 @@ Single-dispatch batch should be **~3x faster** than CPU for 1000+ pages.
 
 3. **`score_compressed_pair()` — always CPU.** Single pair, no GPU path.
 
-4. **`score_all_pages()` — always float x sign.**
+4. **`scores()` — always float x sign.**
    With GPU: batches all sign bits + norms across all pages into
    contiguous buffers, single GPU dispatch, 5.6x faster.
    Without GPU: `sketch.score()` per page on CPU.
@@ -69,7 +69,7 @@ Single-dispatch batch should be **~3x faster** than CPU for 1000+ pages.
 
 ### Single environment variable
 
-- `QJL_GPU_MIN_BATCH` (default 5000) — controls `score_all_pages`
+- `QJL_GPU_MIN_BATCH` (default 5000) — controls `scores`
   GPU dispatch threshold. Only env var needed since GPU only
   activates in one place.
 - Removed `QJL_GPU_MIN_BATCH_COMPRESSED` — no longer used.
@@ -94,7 +94,7 @@ is unbeatable on Apple Silicon.
    the threshold (5K+) is never reached by per-page calls, making
    the dispatch check dead code.
 
-2. **Remove GPU entirely** — rejected because batched `score_all_pages`
+2. **Remove GPU entirely** — rejected because batched `scores`
    is a valid use case where GPU can win.
 
 3. **Separate thresholds per method** — rejected as unnecessary

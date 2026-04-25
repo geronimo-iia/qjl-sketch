@@ -5,7 +5,7 @@
 ```
 +---------------------------------------------------+
 |  Layer 4: End-to-end (pipeline)                   |  llm-wiki
-|  "search query -> ranked pages with scores"       |
+|  "search token -> ranked pages with scores"       |
 +---------------------------------------------------+
 |  Layer 3: Persistence + Integration               |  tests/
 |  "compress -> write -> reload -> score = same"    |
@@ -56,7 +56,7 @@ Inline in each `src/*.rs` module via `#[cfg(test)]`.
 | rotation.rs | 7 | Orthogonality, round-trip, norm preservation, determinism |
 | mse_quant.rs | 6 | Round-trip, score vs exact, MSE decreases with bits |
 | store/config.rs | 6 | Config round-trip, index entry, sketch reconstruction |
-| store/key_store.rs | 24 | Create, append, get, staleness, update, compact, score_all_pages |
+| store/key_store.rs | 24 | Create, append, get, staleness, update, compact, scores |
 | store/value_store.rs | 10 | Create, append, get, staleness, update, compact |
 
 ## Layer 2 -- Quality Tests (11 tests)
@@ -100,5 +100,5 @@ Require a GPU adapter -- marked `#[ignore]`.
 | gpu_context_initializes | Adapter found |
 | gpu_float_sign_score_matches_cpu | GPU scores match CPU within 1e-2 |
 | gpu_score_empty_input | Empty input returns empty vec |
-| test_score_all_pages_gpu_dispatch | GPU dispatch returns valid results |
-| test_score_all_pages_gpu_results_valid | All scores finite |
+| test_scores_gpu_dispatch | GPU dispatch returns valid results |
+| test_scores_gpu_results_valid | All scores finite |

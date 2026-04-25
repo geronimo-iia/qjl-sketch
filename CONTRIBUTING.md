@@ -34,7 +34,7 @@ Default features are empty — both are opt-in.
 
 | Variable | Default | What it controls |
 |----------|---------|------------------|
-| `QJL_GPU_MIN_BATCH` | 5000 | Total vectors for `score_all_pages` GPU dispatch |
+| `QJL_GPU_MIN_BATCH` | 5000 | Total vectors for `scores` GPU dispatch |
 
 ## Benchmarks
 

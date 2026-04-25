@@ -10,8 +10,8 @@ Public API surface of `qjl-sketch`, organized by use case.
 use qjl_sketch::sketch::QJLSketch;
 use qjl_sketch::outliers::detect_outliers;
 
-let sketch = QJLSketch::new(head_dim, sketch_dim, outlier_sketch_dim, seed)?;
-let outliers = detect_outliers(&keys, group_size, head_dim, count)?;
+let sketch = QJLSketch::new(dim, sketch_dim, outlier_sketch_dim, seed)?;
+let outliers = detect_outliers(&keys, group_size, dim, count)?;
 let compressed = sketch.quantize(&keys, num_vectors, &outliers)?;
 ```
 
@@ -53,7 +53,7 @@ let rot = RandomRotation::new(dim, seed)?;
 let cb = generate_codebook(dim, bit_width, iterations)?;
 let quantized = mse_quantize(&vectors, num, &rot, &cb)?;
 let reconstructed = mse_dequantize(&quantized, &rot, &cb)?;
-let scores = mse_score(&query, &quantized, &rot, &cb)?;
+let scores = mse_score(&token, &quantized, &rot, &cb)?;
 ```
 
 | Item                                  | Module      | Description                            |
@@ -70,7 +70,7 @@ let scores = mse_score(&query, &quantized, &rot, &cb)?;
 | `MseQuantized`                        | `mse_quant` | Per-coordinate codebook indices        |
 | `mse_quantize(vecs, n, rot, cb)`      | `mse_quant` | Rotate + quantize per coordinate       |
 | `mse_dequantize(q, rot, cb)`          | `mse_quant` | Dequantize + inverse rotate            |
-| `mse_score(query, q, rot, cb)`        | `mse_quant` | Score query against quantized vectors  |
+| `mse_score(token, q, rot, cb)`        | `mse_quant` | Score token against quantized vectors  |
 
 ### Streaming compression
 
@@ -80,7 +80,7 @@ use qjl_sketch::quantizer::KeyQuantizer;
 let mut kq = KeyQuantizer::new(&sketch, group_size, outlier_count, buffer_size)?;
 kq.build_sketch(&keys, num_vectors)?;  // batch
 kq.update(&single_key)?;               // one at a time
-let scores = kq.attention_score(&query)?;
+let scores = kq.score_token(&token)?;
 ```
 
 | Item           | Module      | Description                           |
@@ -90,8 +90,8 @@ let scores = kq.attention_score(&query)?;
 ## Score
 
 ```rust
-// Float x sign (query vs compressed keys)
-let scores = sketch.score(&query, &compressed)?;
+// Float x sign (token vs compressed keys)
+let scores = sketch.score(&token, &compressed)?;
 
 // Compressed x compressed (page-to-page similarity)
 let scores = sketch.score_compressed(&a, &b)?;
@@ -103,7 +103,7 @@ let sim = hamming_similarity(&a_bytes, &b_bytes, total_bits);
 
 | Item                                           | Module  | Description                                |
 | ---------------------------------------------- | ------- | ------------------------------------------ |
-| `QJLSketch::score(query, compressed)`          | `score` | Float x sign inner product estimate        |
+| `QJLSketch::score(token, compressed)`          | `score` | Float x sign inner product estimate        |
 | `QJLSketch::score_compressed(a, b)`            | `score` | Hamming cosine between two compressed sets |
 | `QJLSketch::score_compressed_pair(a, i, b, j)` | `score` | Single pair from different sets            |
 | `hamming_similarity(a, b, bits)`               | `score` | Fraction of matching bits [0, 1]           |
@@ -120,18 +120,18 @@ let mut store = KeyStore::create(dir, config)?;
 let store = KeyStore::open(dir)?;
 
 // Read / write
-store.append(slug_hash, content_hash, &compressed)?;
-let page = store.get_page(slug_hash);
-let fresh = store.is_fresh(slug_hash, content_hash);
+store.append(entry_id, content_hash, &compressed)?;
+let page = store.get_entry(entry_id);
+let fresh = store.is_fresh(entry_id, content_hash);
 
 // Maintenance
 store.compact()?;
 
 // Score all pages (GPU-accelerated with `gpu` feature)
-let results = store.score_all_pages(&query, &sketch, &outliers)?;
+let results = store.scores(&token, &sketch, &outliers)?;
 
 // Export / import (requires `serde` feature)
-for entry in store.iter_pages() { /* ... */ }
+for entry in store.iter_entries() { /* ... */ }
 store.import_entry(&entry)?;
 ```
 
@@ -140,14 +140,14 @@ store.import_entry(&entry)?;
 | `KeyStore`                                  | `store::key_store`   | Append-only compressed key storage  |
 | `KeyStore::create(dir, config)`             |                      | Create new store                    |
 | `KeyStore::open(dir)`                       |                      | Open existing (with crash recovery) |
-| `KeyStore::append(slug, hash, keys)`        |                      | Store compressed keys               |
-| `KeyStore::get_page(slug)`                  |                      | Zero-copy page lookup               |
-| `KeyStore::is_fresh(slug, hash)`            |                      | Check staleness                     |
+| `KeyStore::append(entry_id, hash, keys)`        |                      | Store compressed keys               |
+| `KeyStore::get_entry(entry_id)`                  |                      | Zero-copy page lookup               |
+| `KeyStore::is_fresh(entry_id, hash)`            |                      | Check staleness                     |
 | `KeyStore::compact()`                       |                      | Reclaim dead space                  |
-| `KeyStore::score_all_pages(q, sketch, out)` |                      | Score query against all pages       |
-| `KeyStore::iter_pages()`                    |                      | Streaming export (serde)            |
+| `KeyStore::scores(token, sketch, out)` |                      | Score token against all pages       |
+| `KeyStore::iter_entries()`                    |                      | Streaming export (serde)            |
 | `KeyStore::import_entry(entry)`             |                      | Streaming import (serde)            |
-| `KeyPageView`                               | `store::key_store`   | Zero-copy view into mmap'd page     |
+| `KeyEntryView`                               | `store::key_store`   | Zero-copy view into mmap'd page     |
 | `KeyExportEntry`                            | `store::key_store`   | Export entry (serde)                |
 | `ValueStore`                                | `store::value_store` | Same API pattern for values         |
 | `ValueExportEntry`                          | `store::value_store` | Export entry (serde)                |
@@ -171,7 +171,7 @@ All public functions return `Result<T, QjlError>`. Variants:
 | Flag    | What it enables                                               |
 | ------- | ------------------------------------------------------------- |
 | `serde` | Serialize/Deserialize on public structs, store export/import  |
-| `gpu`   | WGPU GPU-accelerated `score_all_pages` (batched float x sign) |
+| `gpu`   | WGPU GPU-accelerated `scores` (batched float x sign) |
 
 ## Utilities
 

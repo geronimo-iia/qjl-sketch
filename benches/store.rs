@@ -20,7 +20,7 @@ fn random_vec(d: usize, rng: &mut ChaCha20Rng) -> Vec<f32> {
 
 fn keys_config() -> KeysConfig {
     KeysConfig {
-        head_dim: 128,
+        dim: 128,
         sketch_dim: 256,
         outlier_sketch_dim: 64,
         seed: 42,
@@ -34,16 +34,16 @@ fn bench_cold_start(c: &mut Criterion) {
     let sketch = config.build_sketch();
     let mut rng = ChaCha20Rng::seed_from_u64(100);
 
-    // Pre-populate with 100 pages
-    for slug in 0u64..100 {
+    // Pre-populate with 100 entries
+    for eid in 0u64..100 {
         let keys = random_vec(32 * 128, &mut rng);
         let outlier_indices = detect_outliers(&keys, 32, 128, 4).unwrap();
         let compressed = sketch.quantize(&keys, 32, &outlier_indices).unwrap();
-        store.append(slug, slug * 10, &compressed).unwrap();
+        store.append(eid, eid * 10, &compressed).unwrap();
     }
     drop(store);
 
-    c.bench_function("cold_start_100_pages", |b| {
+    c.bench_function("cold_start_100_entries", |b| {
         b.iter(|| {
             let store = KeyStore::open(black_box(dir.path())).unwrap();
             black_box(store.len());
@@ -62,40 +62,38 @@ fn bench_append(c: &mut Criterion) {
     let outlier_indices = detect_outliers(&keys, 32, 128, 4).unwrap();
     let compressed = sketch.quantize(&keys, 32, &outlier_indices).unwrap();
 
-    let mut slug = 0u64;
+    let mut eid = 0u64;
     c.bench_function("append_single_page", |b| {
         b.iter(|| {
-            store
-                .append(slug, slug * 10, black_box(&compressed))
-                .unwrap();
-            slug += 1;
+            store.append(eid, eid * 10, black_box(&compressed)).unwrap();
+            eid += 1;
         });
     });
 }
 
-fn bench_get_page(c: &mut Criterion) {
+fn bench_get_entry(c: &mut Criterion) {
     let dir = tempdir().unwrap();
     let config = keys_config();
     let mut store = KeyStore::create(dir.path(), config.clone()).unwrap();
     let sketch = config.build_sketch();
     let mut rng = ChaCha20Rng::seed_from_u64(300);
 
-    for slug in 0u64..100 {
+    for eid in 0u64..100 {
         let keys = random_vec(32 * 128, &mut rng);
         let outlier_indices = detect_outliers(&keys, 32, 128, 4).unwrap();
         let compressed = sketch.quantize(&keys, 32, &outlier_indices).unwrap();
-        store.append(slug, slug * 10, &compressed).unwrap();
+        store.append(eid, eid * 10, &compressed).unwrap();
     }
 
-    c.bench_function("get_page_from_100", |b| {
-        let mut slug = 0u64;
+    c.bench_function("get_entry_from_100_entries", |b| {
+        let mut eid = 0u64;
         b.iter(|| {
-            let page = store.get_page(black_box(slug % 100)).unwrap();
-            black_box(page.num_vectors);
-            slug += 1;
+            let view = store.get_entry(black_box(eid % 100)).unwrap();
+            black_box(view.num_vectors);
+            eid += 1;
         });
     });
 }
 
-criterion_group!(benches, bench_cold_start, bench_append, bench_get_page);
+criterion_group!(benches, bench_cold_start, bench_append, bench_get_entry);
 criterion_main!(benches);

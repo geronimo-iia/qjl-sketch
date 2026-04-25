@@ -67,7 +67,7 @@ impl GpuContext {
         GPU_CONTEXT.get_or_init(GpuContext::try_init).as_ref()
     }
 
-    /// Score a query against compressed keys on GPU (float×sign).
+    /// Score a token against compressed keys on GPU (float×sign).
     #[allow(clippy::too_many_arguments)]
     pub fn score_float_sign_batch(
         &self,
@@ -317,7 +317,7 @@ mod tests {
         let mut rng = ChaCha20Rng::seed_from_u64(123);
         let normal: StandardNormal = StandardNormal;
 
-        let query: Vec<f32> = (0..d)
+        let token: Vec<f32> = (0..d)
             .map(|_| {
                 let v: f64 = normal.sample(&mut rng);
                 v as f32
@@ -337,16 +337,16 @@ mod tests {
             .unwrap();
 
         // CPU scores
-        let cpu_scores = sketch.score(&query, &compressed).unwrap();
+        let cpu_scores = sketch.score(&token, &compressed).unwrap();
 
-        // GPU: compute query sketches on CPU (same as score() does)
-        let q_sketch = crate::sketch::matvec(&sketch.proj_dir_quant, s, d, &query);
+        // GPU: compute token sketches on CPU (same as score() does)
+        let q_sketch = crate::sketch::matvec(&sketch.proj_dir_quant, s, d, &token);
         let mut q_outlier_sketch = vec![0.0f32; s];
         for &idx in &compressed.outlier_indices {
             let j = idx as usize;
             let row_start = j * s;
             for (p, qos) in q_outlier_sketch.iter_mut().enumerate().take(s) {
-                *qos += query[j] * sketch.proj_dir_score[row_start + p];
+                *qos += token[j] * sketch.proj_dir_score[row_start + p];
             }
         }
         let q_inlier_sketch: Vec<f32> = q_sketch

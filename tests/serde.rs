@@ -82,7 +82,7 @@ fn mse_quantized_roundtrip() {
 #[test]
 fn keys_config_roundtrip() {
     let config = KeysConfig {
-        head_dim: 128,
+        dim: 128,
         sketch_dim: 256,
         outlier_sketch_dim: 64,
         seed: 42,
@@ -106,7 +106,7 @@ fn values_config_roundtrip() {
 #[test]
 fn index_entry_roundtrip() {
     let entry = IndexEntry {
-        slug_hash: 0xDEAD,
+        entry_id: 0xDEAD,
         offset: 1024,
         entry_len: 500,
         generation: 3,
@@ -138,7 +138,7 @@ fn qjl_sketch_roundtrip() {
     let sketch = QJLSketch::new(64, 128, 32, 42).unwrap();
     let json = serde_json::to_string(&sketch).unwrap();
     let s2: QJLSketch = serde_json::from_str(&json).unwrap();
-    assert_eq!(sketch.head_dim, s2.head_dim);
+    assert_eq!(sketch.dim, s2.dim);
     assert_eq!(sketch.sketch_dim, s2.sketch_dim);
     assert_eq!(sketch.seed, s2.seed);
     assert_eq!(sketch.proj_dir_score, s2.proj_dir_score);
@@ -166,7 +166,7 @@ fn key_store_export_import_roundtrip() {
     let dir_src = tempdir().unwrap();
     let dir_dst = tempdir().unwrap();
     let config = KeysConfig {
-        head_dim: 16,
+        dim: 16,
         sketch_dim: 32,
         outlier_sketch_dim: 16,
         seed: 42,
@@ -175,15 +175,15 @@ fn key_store_export_import_roundtrip() {
     let mut store_src = KeyStore::create(dir_src.path(), config.clone()).unwrap();
 
     let mut rng = ChaCha20Rng::seed_from_u64(500);
-    for slug in 0u64..5 {
+    for eid in 0u64..5 {
         let keys = random_vec(4 * 16, &mut rng);
         let compressed = sketch.quantize(&keys, 4, &[0u8]).unwrap();
-        store_src.append(slug, slug * 100, &compressed).unwrap();
+        store_src.append(eid, eid * 100, &compressed).unwrap();
     }
 
     // Export → serialize → deserialize → import
     let mut store_dst = KeyStore::create(dir_dst.path(), config.clone()).unwrap();
-    for entry in store_src.iter_pages() {
+    for entry in store_src.iter_entries() {
         let json = serde_json::to_string(&entry).unwrap();
         let entry2: KeyExportEntry = serde_json::from_str(&json).unwrap();
         store_dst.import_entry(&entry2).unwrap();
@@ -192,14 +192,14 @@ fn key_store_export_import_roundtrip() {
     assert_eq!(store_dst.len(), 5);
 
     // Verify scores match
-    let query = random_vec(16, &mut rng);
-    for slug in 0u64..5 {
-        let page_src = store_src.get_page(slug).unwrap();
-        let page_dst = store_dst.get_page(slug).unwrap();
-        let ck_src = page_src.to_compressed_keys(16);
-        let ck_dst = page_dst.to_compressed_keys(16);
-        let scores_src = sketch.score(&query, &ck_src).unwrap();
-        let scores_dst = sketch.score(&query, &ck_dst).unwrap();
+    let token = random_vec(16, &mut rng);
+    for eid in 0u64..5 {
+        let view_src = store_src.get_entry(eid).unwrap();
+        let view_dst = store_dst.get_entry(eid).unwrap();
+        let ck_src = view_src.to_compressed(16);
+        let ck_dst = view_dst.to_compressed(16);
+        let scores_src = sketch.score(&token, &ck_src).unwrap();
+        let scores_dst = sketch.score(&token, &ck_dst).unwrap();
         assert_eq!(scores_src, scores_dst);
     }
 }
@@ -214,25 +214,25 @@ fn value_store_export_import_roundtrip() {
     };
     let mut store_src = ValueStore::create(dir_src.path(), config.clone()).unwrap();
 
-    for slug in 0u64..5 {
-        let values: Vec<f32> = (0..8).map(|i| (slug as f32) + i as f32).collect();
+    for eid in 0u64..5 {
+        let values: Vec<f32> = (0..8).map(|i| (eid as f32) + i as f32).collect();
         let compressed = quantize_values(&values, 8, 4).unwrap();
-        store_src.append(slug, slug * 10, &compressed).unwrap();
+        store_src.append(eid, eid * 10, &compressed).unwrap();
     }
 
     let mut store_dst = ValueStore::create(dir_dst.path(), config).unwrap();
-    for entry in store_src.iter_pages() {
+    for entry in store_src.iter_entries() {
         let json = serde_json::to_string(&entry).unwrap();
         let entry2: ValueExportEntry = serde_json::from_str(&json).unwrap();
         store_dst.import_entry(&entry2).unwrap();
     }
 
     assert_eq!(store_dst.len(), 5);
-    for slug in 0u64..5 {
-        let p_src = store_src.get_page(slug).unwrap();
-        let p_dst = store_dst.get_page(slug).unwrap();
-        assert_eq!(p_src.packed(), p_dst.packed());
-        assert_eq!(p_src.scale(), p_dst.scale());
-        assert_eq!(p_src.mn(), p_dst.mn());
+    for eid in 0u64..5 {
+        let v_src = store_src.get_entry(eid).unwrap();
+        let v_dst = store_dst.get_entry(eid).unwrap();
+        assert_eq!(v_src.packed(), v_dst.packed());
+        assert_eq!(v_src.scale(), v_dst.scale());
+        assert_eq!(v_src.mn(), v_dst.mn());
     }
 }

@@ -12,7 +12,7 @@ pub const INDEX_VERSION: u16 = 1;
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeysConfig {
-    pub head_dim: u16,
+    pub dim: u16,
     pub sketch_dim: u16,
     pub outlier_sketch_dim: u16,
     pub seed: u64,
@@ -22,7 +22,7 @@ impl KeysConfig {
     pub fn write_to(&self, w: &mut impl Write) -> Result<()> {
         w.write_all(KEYS_INDEX_MAGIC)?;
         w.write_all(&INDEX_VERSION.to_le_bytes())?;
-        w.write_all(&self.head_dim.to_le_bytes())?;
+        w.write_all(&self.dim.to_le_bytes())?;
         w.write_all(&self.sketch_dim.to_le_bytes())?;
         w.write_all(&self.outlier_sketch_dim.to_le_bytes())?;
         w.write_all(&self.seed.to_le_bytes())?;
@@ -43,7 +43,7 @@ impl KeysConfig {
             });
         }
         Ok(Self {
-            head_dim: read_u16(r)?,
+            dim: read_u16(r)?,
             sketch_dim: read_u16(r)?,
             outlier_sketch_dim: read_u16(r)?,
             seed: read_u64(r)?,
@@ -52,7 +52,7 @@ impl KeysConfig {
 
     pub fn build_sketch(&self) -> QJLSketch {
         QJLSketch::new(
-            self.head_dim as usize,
+            self.dim as usize,
             self.sketch_dim as usize,
             self.outlier_sketch_dim as usize,
             self.seed,
@@ -100,7 +100,7 @@ impl ValuesConfig {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexEntry {
-    pub slug_hash: u64,
+    pub entry_id: u64,
     pub offset: u64,
     pub entry_len: u32,
     pub generation: u32,
@@ -111,7 +111,7 @@ impl IndexEntry {
     pub const SIZE: usize = 32;
 
     pub fn write_to(&self, w: &mut impl Write) -> Result<()> {
-        w.write_all(&self.slug_hash.to_le_bytes())?;
+        w.write_all(&self.entry_id.to_le_bytes())?;
         w.write_all(&self.offset.to_le_bytes())?;
         w.write_all(&self.entry_len.to_le_bytes())?;
         w.write_all(&self.generation.to_le_bytes())?;
@@ -121,7 +121,7 @@ impl IndexEntry {
 
     pub fn read_from(r: &mut impl Read) -> Result<Self> {
         Ok(Self {
-            slug_hash: read_u64(r)?,
+            entry_id: read_u64(r)?,
             offset: read_u64(r)?,
             entry_len: read_u32(r)?,
             generation: read_u32(r)?,
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_keys_config_round_trip() {
         let config = KeysConfig {
-            head_dim: 128,
+            dim: 128,
             sketch_dim: 256,
             outlier_sketch_dim: 64,
             seed: 42,
@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn test_index_entry_round_trip() {
         let entry = IndexEntry {
-            slug_hash: 0xDEADBEEF,
+            entry_id: 0xDEADBEEF,
             offset: 1024,
             entry_len: 500,
             generation: 3,
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn test_sketch_reconstruction() {
         let config = KeysConfig {
-            head_dim: 64,
+            dim: 64,
             sketch_dim: 128,
             outlier_sketch_dim: 32,
             seed: 42,
@@ -257,7 +257,7 @@ mod tests {
         let sketch_a = config.build_sketch();
         let sketch_b = config.build_sketch();
         assert_eq!(sketch_a.proj_dir_score, sketch_b.proj_dir_score);
-        assert_eq!(sketch_a.head_dim, 64);
+        assert_eq!(sketch_a.dim, 64);
         assert_eq!(sketch_a.sketch_dim, 128);
     }
 

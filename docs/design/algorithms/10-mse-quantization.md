@@ -66,7 +66,7 @@ Algorithm:
 
 ```
 Input:
-  query     : [d] f32
+  token     : [d] f32
   quantized : MseQuantized
   rotation  : RandomRotation
   codebook  : Codebook
@@ -75,13 +75,13 @@ Output:
   scores : [num_vectors] f32
 
 Algorithm:
-  1. q_rot = Π · query                    (rotate query once)
+  1. q_rot = Π · token                    (rotate token once)
   2. For each quantized vector v:
        score = Σ_j q_rot[j] · codebook.dequantize(indices[v,j])
 ```
 
 The scoring avoids inverse rotation of every stored vector.
-By orthogonality: dot(q, Πᵀ·ỹ) = dot(Π·q, ỹ). The query is
+By orthogonality: dot(q, Πᵀ·ỹ) = dot(Π·q, ỹ). The token is
 rotated once (O(d²)), then each score is O(d) centroid lookups + dot.
 
 ## Theoretical MSE bound

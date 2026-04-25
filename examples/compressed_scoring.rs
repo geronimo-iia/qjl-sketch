@@ -1,4 +1,4 @@
-//! Compressed-vs-compressed scoring: compare two pages without decompressing.
+//! Compressed-vs-compressed scoring: compare two vector groups without decompressing.
 //!
 //! Run with: `cargo run --example compressed_scoring`
 
@@ -23,14 +23,14 @@ fn main() {
     let sketch = QJLSketch::new(d, s, s, 42).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(200);
 
-    // Compress two sets of vectors (e.g. two wiki pages)
+    // Compress two sets of vectors (e.g. two vector groups)
     let num = 8;
-    let page_a: Vec<f32> = (0..num).flat_map(|_| random_vec(d, &mut rng)).collect();
-    let page_b: Vec<f32> = (0..num).flat_map(|_| random_vec(d, &mut rng)).collect();
+    let group_a: Vec<f32> = (0..num).flat_map(|_| random_vec(d, &mut rng)).collect();
+    let group_b: Vec<f32> = (0..num).flat_map(|_| random_vec(d, &mut rng)).collect();
 
     let outliers = vec![0u8];
-    let ca = sketch.quantize(&page_a, num, &outliers).unwrap();
-    let cb = sketch.quantize(&page_b, num, &outliers).unwrap();
+    let ca = sketch.quantize(&group_a, num, &outliers).unwrap();
+    let cb = sketch.quantize(&group_b, num, &outliers).unwrap();
 
     // Batch scoring: a[i] vs b[i]
     let batch_scores = sketch.score_compressed(&ca, &cb).unwrap();
@@ -50,7 +50,7 @@ fn main() {
     let self_scores = sketch.score_compressed(&ca, &ca).unwrap();
     println!("\nSelf-similarity (a[i] vs a[i]):");
     for (i, s) in self_scores.iter().enumerate() {
-        let exact_norm_sq: f32 = page_a[i * d..(i + 1) * d].iter().map(|x| x * x).sum();
+        let exact_norm_sq: f32 = group_a[i * d..(i + 1) * d].iter().map(|x| x * x).sum();
         println!("  vec {i}: score={s:.4}, ||v||²={exact_norm_sq:.4}");
     }
 }

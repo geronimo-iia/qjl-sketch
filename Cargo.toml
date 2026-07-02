@@ -28,7 +28,7 @@ rayon = "1.10"
 memmap2 = "0.9"
 blake3 = "1.5"
 serde = { version = "1", features = ["derive"], optional = true }
-wgpu = { version = "29", optional = true }
+wgpu = { version = "30", optional = true }
 pollster = { version = "0.4", optional = true }
 log = "0.4"
 

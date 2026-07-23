@@ -200,7 +200,7 @@ impl GpuContext {
         rx.recv().unwrap().unwrap();
 
         let data = slice.get_mapped_range().unwrap();
-        let scores: Vec<f32> = bytemuck::cast_slice(&*data).to_vec();
+        let scores: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
         drop(data);
         readback_buf.unmap();
         scores

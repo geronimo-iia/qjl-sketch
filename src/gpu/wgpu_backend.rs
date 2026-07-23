@@ -24,6 +24,7 @@ impl GpuContext {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
+                ..Default::default()
             })) {
                 Ok(a) => a,
                 Err(e) => {
@@ -198,7 +199,7 @@ impl GpuContext {
             .unwrap();
         rx.recv().unwrap().unwrap();
 
-        let data = slice.get_mapped_range();
+        let data = slice.get_mapped_range().unwrap();
         let scores: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
         drop(data);
         readback_buf.unmap();

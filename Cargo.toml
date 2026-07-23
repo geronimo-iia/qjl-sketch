@@ -1,6 +1,6 @@
 [package]
 name = "qjl-sketch"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 rust-version = "1.95"
 description = "QJL sign-based vector compression and scoring with near-optimal distortion rate"
@@ -28,8 +28,8 @@ rayon = "1.10"
 memmap2 = "0.9"
 blake3 = "1.5"
 serde = { version = "1", features = ["derive"], optional = true }
-wgpu = { version = "29", optional = true }
-pollster = { version = "0.4", optional = true }
+wgpu = { version = "30", optional = true }
+pollster = { version = "1.0", optional = true }
 log = "0.4"
 
 [dev-dependencies]

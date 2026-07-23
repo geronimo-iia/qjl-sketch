@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-07-24
+
+### Changed
+
+- Bumped `wgpu` from 29 to 30
+- Bumped `pollster` from 0.4 to 1.0
+- Updated `crossbeam-epoch` (0.9.18 → 0.9.20) and `memmap2` (0.9.10 → 0.9.11) to fix security advisories
+
+### Fixed
+
+- `wgpu_backend`: added `..Default::default()` to `RequestAdapterOptions` for new `apply_limit_buckets` field (wgpu 30 breaking change)
+- `wgpu_backend`: `get_mapped_range()` now returns `Result` in wgpu 30 — unwrap and explicit deref for `bytemuck::cast_slice`
+
 ## [0.6.0] — 2026-04-26
 
 ### Changed (Breaking)

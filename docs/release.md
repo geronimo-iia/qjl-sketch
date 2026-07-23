@@ -2,10 +2,13 @@
 
 ## Prerequisites
 
-- All tests pass (`cargo test && cargo test -- --ignored`)
+- All tests pass:
+  - `cargo test && cargo test -- --ignored`
+  - `cargo test --features gpu && cargo test --features gpu -- --ignored`
 - `cargo clippy -- -D warnings` clean
+- `cargo clippy --features gpu -- -D warnings` clean
 - `cargo fmt -- --check` clean
-- `cargo audit` clean
+- `cargo audit` clean (0 vulnerabilities; warnings from indirect dev-deps acceptable)
 - CHANGELOG.md updated with release date and notes
 
 ## Steps
